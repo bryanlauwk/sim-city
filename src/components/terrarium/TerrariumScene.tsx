@@ -37,21 +37,26 @@ export function TerrariumScene({ state, width = 560, height = 620 }: Props) {
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  // Interior geometry within the jar.png (round jar with cork lid).
-  // Wide ellipse-ish interior. We track an upper rect (for plants/fauna)
-  // and a narrower band at the bottom for the substrate (matches jar curve).
-  const interior = { left: 0.13, right: 0.87, top: 0.21, bottom: 0.84 };
+  // Interior geometry within the jar.png (round jar with cork lid + brass rim).
+  // Glass bowl runs roughly from y=0.30 (just under brass) to y=0.86 (bottom),
+  // x=0.22..0.80 at the equator.
+  // Bowl glass interior (after regenerated transparent jar). Bowl runs from
+  // just under the brass collar down to the rounded base.
+  const interior = { left: 0.22, right: 0.80, top: 0.30, bottom: 0.82 };
   const intW = (interior.right - interior.left) * width;
   const intH = (interior.bottom - interior.top) * height;
   const intX = interior.left * width;
   const intY = interior.top * height;
 
-  // Substrate sits inside the curved bottom — narrower than full interior.
-  const subInset = 0.08; // % of width inset on each side
+  // Substrate sits inside the curved bottom — narrower than full interior
+  // because the bowl curves inward toward the base.
+  // Bowl narrows toward the base, so the substrate slab is much narrower
+  // than the equator width.
+  const subInset = 0.22;
   const subX = intX + intW * subInset;
   const subW = intW * (1 - subInset * 2);
-  const substrateH = 70;
-  const soilTopY = intY + intH - substrateH - 6;
+  const substrateH = 48;
+  const soilTopY = intY + intH - substrateH;
 
   const substrateImg = ASSETS.substrate[state.recipe.substrate];
 
@@ -69,16 +74,15 @@ export function TerrariumScene({ state, width = 560, height = 620 }: Props) {
         className="absolute inset-0 rounded-2xl"
         style={{
           background:
-            "radial-gradient(ellipse at 30% 40%, oklch(0.78 0.08 140 / 0.55), transparent 60%), radial-gradient(ellipse at 70% 60%, oklch(0.7 0.06 80 / 0.4), transparent 65%), linear-gradient(180deg, oklch(0.92 0.02 130), oklch(0.86 0.03 100))",
-          filter: "blur(0.5px)",
+            "radial-gradient(ellipse at 50% 110%, oklch(0.78 0.05 140 / 0.35), transparent 55%), linear-gradient(180deg, oklch(0.88 0.03 130), oklch(0.82 0.04 110))",
         }}
       />
       <div
         className="absolute inset-0 rounded-2xl pointer-events-none"
         style={{
           background:
-            "radial-gradient(circle at 25% 30%, oklch(0.95 0.03 130 / 0.5), transparent 35%), radial-gradient(circle at 80% 70%, oklch(0.7 0.1 60 / 0.35), transparent 30%)",
-          filter: "blur(20px)",
+            "radial-gradient(circle at 80% 85%, oklch(0.7 0.08 70 / 0.25), transparent 40%)",
+          filter: "blur(24px)",
         }}
       />
 
@@ -103,7 +107,7 @@ export function TerrariumScene({ state, width = 560, height = 620 }: Props) {
           top: soilTopY,
           width: subW,
           height: substrateH,
-          borderRadius: "20% 20% 45% 45% / 30% 30% 90% 90%",
+          borderRadius: "10% 10% 50% 50% / 20% 20% 60% 60%",
         }}
       >
         <img
@@ -202,6 +206,7 @@ export function TerrariumScene({ state, width = 560, height = 620 }: Props) {
         className="absolute inset-0 w-full h-full pointer-events-none"
         style={{ zIndex: 40 }}
       />
+
 
       {/* Condensation overlay (inside glass) */}
       {condOpacity > 0.02 && (

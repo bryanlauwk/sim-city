@@ -13,10 +13,12 @@ import faunaIsopod from "@/assets/terrarium/fauna-isopod.png";
 import faunaSnail from "@/assets/terrarium/fauna-snail.png";
 import faunaAnt from "@/assets/terrarium/fauna-ant.png";
 import mold from "@/assets/terrarium/mold.png";
+import glassHighlight from "@/assets/terrarium/glass-highlight.png";
 
 export const ASSETS = {
   jar,
   mold,
+  glassHighlight,
   substrate: {
     coir: subCoir,
     loam: subLoam,
