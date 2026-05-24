@@ -118,6 +118,7 @@ function Index() {
   };
 
   const forecast = useMemo(() => getForecast(recipe), [recipe]);
+  const previewState = useMemo(() => createInitialState(recipe), [recipe]);
 
   return (
     <div className="min-h-screen w-full">
