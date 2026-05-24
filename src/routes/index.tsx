@@ -448,4 +448,3 @@ function getForecast(recipe: Recipe): { label: string; tone: "good" | "risk" | "
   if (recipe.light < 4) return { label: "Risky — low light", tone: "risk" };
   return { label: "Looks balanced", tone: "good" };
 }
-}
