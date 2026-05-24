@@ -40,7 +40,9 @@ export function TerrariumScene({ state, width = 560, height = 620 }: Props) {
   // Interior geometry within the jar.png (round jar with cork lid + brass rim).
   // Glass bowl runs roughly from y=0.30 (just under brass) to y=0.86 (bottom),
   // x=0.22..0.80 at the equator.
-  const interior = { left: 0.22, right: 0.80, top: 0.30, bottom: 0.86 };
+  // Bowl glass interior (after regenerated transparent jar). Bowl runs from
+  // just under the brass collar down to the rounded base.
+  const interior = { left: 0.22, right: 0.80, top: 0.30, bottom: 0.82 };
   const intW = (interior.right - interior.left) * width;
   const intH = (interior.bottom - interior.top) * height;
   const intX = interior.left * width;
@@ -48,11 +50,13 @@ export function TerrariumScene({ state, width = 560, height = 620 }: Props) {
 
   // Substrate sits inside the curved bottom — narrower than full interior
   // because the bowl curves inward toward the base.
-  const subInset = 0.10;
+  // Bowl narrows toward the base, so the substrate slab is much narrower
+  // than the equator width.
+  const subInset = 0.22;
   const subX = intX + intW * subInset;
   const subW = intW * (1 - subInset * 2);
-  const substrateH = 56;
-  const soilTopY = intY + intH - substrateH - 6;
+  const substrateH = 48;
+  const soilTopY = intY + intH - substrateH;
 
   const substrateImg = ASSETS.substrate[state.recipe.substrate];
 
