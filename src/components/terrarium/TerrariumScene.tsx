@@ -37,21 +37,22 @@ export function TerrariumScene({ state, width = 560, height = 620 }: Props) {
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  // Interior geometry within the jar.png (round jar with cork lid).
-  // Wide ellipse-ish interior. We track an upper rect (for plants/fauna)
-  // and a narrower band at the bottom for the substrate (matches jar curve).
-  const interior = { left: 0.13, right: 0.87, top: 0.21, bottom: 0.84 };
+  // Interior geometry within the jar.png (round jar with cork lid + brass rim).
+  // Glass bowl runs roughly from y=0.30 (just under brass) to y=0.86 (bottom),
+  // x=0.22..0.80 at the equator.
+  const interior = { left: 0.22, right: 0.80, top: 0.30, bottom: 0.86 };
   const intW = (interior.right - interior.left) * width;
   const intH = (interior.bottom - interior.top) * height;
   const intX = interior.left * width;
   const intY = interior.top * height;
 
-  // Substrate sits inside the curved bottom — narrower than full interior.
-  const subInset = 0.08; // % of width inset on each side
+  // Substrate sits inside the curved bottom — narrower than full interior
+  // because the bowl curves inward toward the base.
+  const subInset = 0.12;
   const subX = intX + intW * subInset;
   const subW = intW * (1 - subInset * 2);
-  const substrateH = 70;
-  const soilTopY = intY + intH - substrateH - 6;
+  const substrateH = 64;
+  const soilTopY = intY + intH - substrateH - 4;
 
   const substrateImg = ASSETS.substrate[state.recipe.substrate];
 
@@ -201,6 +202,15 @@ export function TerrariumScene({ state, width = 560, height = 620 }: Props) {
         draggable={false}
         className="absolute inset-0 w-full h-full pointer-events-none"
         style={{ zIndex: 40 }}
+      />
+
+      {/* Glass specular highlight (sits on top of contents, below condensation) */}
+      <img
+        src={ASSETS.glassHighlight}
+        alt=""
+        draggable={false}
+        className="absolute inset-0 w-full h-full pointer-events-none"
+        style={{ zIndex: 42, opacity: 0.55, mixBlendMode: "screen" }}
       />
 
       {/* Condensation overlay (inside glass) */}
