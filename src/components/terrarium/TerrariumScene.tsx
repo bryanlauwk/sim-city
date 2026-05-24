@@ -37,17 +37,23 @@ export function TerrariumScene({ state, width = 560, height = 620 }: Props) {
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  // Interior geometry within the jar.png (1024x1024 source).
-  // Interior bounds (as % of scene box): roughly x 9%..91%, y 17%..93%.
-  const interior = { left: 0.1, right: 0.9, top: 0.2, bottom: 0.86 };
+  // Interior geometry within the jar.png (round jar with cork lid).
+  // Wide ellipse-ish interior. We track an upper rect (for plants/fauna)
+  // and a narrower band at the bottom for the substrate (matches jar curve).
+  const interior = { left: 0.13, right: 0.87, top: 0.21, bottom: 0.84 };
   const intW = (interior.right - interior.left) * width;
   const intH = (interior.bottom - interior.top) * height;
   const intX = interior.left * width;
   const intY = interior.top * height;
 
+  // Substrate sits inside the curved bottom — narrower than full interior.
+  const subInset = 0.08; // % of width inset on each side
+  const subX = intX + intW * subInset;
+  const subW = intW * (1 - subInset * 2);
+  const substrateH = 70;
+  const soilTopY = intY + intH - substrateH - 6;
+
   const substrateImg = ASSETS.substrate[state.recipe.substrate];
-  const substrateH = 110; // px
-  const soilTopY = intY + intH - substrateH + 20;
 
   const condOpacity = Math.max(0, Math.min(0.7, (state.humidity - 55) / 100));
   const moldOpacity = Math.min(0.7, state.moldCover / 100);
@@ -93,17 +99,17 @@ export function TerrariumScene({ state, width = 560, height = 620 }: Props) {
       <div
         className="absolute overflow-hidden pointer-events-none"
         style={{
-          left: intX,
+          left: subX,
           top: soilTopY,
-          width: intW,
-          height: substrateH + 10,
-          borderRadius: "0 0 45% 45% / 0 0 80% 80%",
+          width: subW,
+          height: substrateH,
+          borderRadius: "20% 20% 45% 45% / 30% 30% 90% 90%",
         }}
       >
         <img
           src={substrateImg}
           alt=""
-          className="w-full h-full object-cover object-bottom"
+          className="w-full h-full object-cover object-center"
           draggable={false}
         />
       </div>
@@ -113,13 +119,13 @@ export function TerrariumScene({ state, width = 560, height = 620 }: Props) {
         <div
           className="absolute pointer-events-none"
           style={{
-            left: intX,
-            top: soilTopY - 10,
-            width: intW,
-            height: 60,
+            left: subX,
+            top: soilTopY - 6,
+            width: subW,
+            height: 40,
             opacity: moldOpacity,
             backgroundImage: `url(${ASSETS.mold})`,
-            backgroundSize: "120px",
+            backgroundSize: "90px",
             backgroundRepeat: "repeat-x",
             backgroundPosition: "center top",
             mixBlendMode: "screen",
@@ -133,8 +139,8 @@ export function TerrariumScene({ state, width = 560, height = 620 }: Props) {
         const scale = p.dead ? 0.45 : 0.55 + p.stage * 0.22 + (p.health / 100) * 0.15;
         const w = def.w * scale;
         const h = def.h * scale;
-        const x = intX + p.x * intW;
-        const baseY = soilTopY + 18;
+        const x = subX + p.x * subW;
+        const baseY = soilTopY + 10;
         return (
           <img
             key={p.id}
@@ -163,9 +169,9 @@ export function TerrariumScene({ state, width = 560, height = 620 }: Props) {
       {state.fauna.map((f) => {
         if (!f.alive) return null;
         const size = FAUNA_SIZE[f.defId] ?? 20;
-        const x = intX + 12 + f.x * (intW - 24);
-        const livableTop = intY + 30;
-        const livableBot = soilTopY + 4;
+        const x = subX + 6 + f.x * (subW - 12);
+        const livableTop = intY + 24;
+        const livableBot = soilTopY - 6;
         const y = livableTop + f.y * (livableBot - livableTop);
         const flip = f.vx < 0;
         return (
