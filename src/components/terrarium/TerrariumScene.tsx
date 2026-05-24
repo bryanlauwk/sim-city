@@ -103,7 +103,7 @@ export function TerrariumScene({ state, width = 560, height = 620 }: Props) {
           top: soilTopY,
           width: subW,
           height: substrateH,
-          borderRadius: "20% 20% 45% 45% / 30% 30% 90% 90%",
+          borderRadius: "10% 10% 50% 50% / 20% 20% 60% 60%",
         }}
       >
         <img
