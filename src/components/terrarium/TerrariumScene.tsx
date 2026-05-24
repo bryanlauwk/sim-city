@@ -204,22 +204,6 @@ export function TerrariumScene({ state, width = 560, height = 620 }: Props) {
         style={{ zIndex: 40 }}
       />
 
-      {/* CSS-painted glass specular highlight on the upper-left of the bowl */}
-      <div
-        className="absolute pointer-events-none"
-        style={{
-          left: intX + intW * 0.05,
-          top: intY + intH * 0.05,
-          width: intW * 0.45,
-          height: intH * 0.55,
-          borderRadius: "50%",
-          background:
-            "radial-gradient(ellipse at 35% 30%, oklch(1 0 0 / 0.55), transparent 60%)",
-          filter: "blur(2px)",
-          zIndex: 42,
-          mixBlendMode: "screen",
-        }}
-      />
 
       {/* Condensation overlay (inside glass) */}
       {condOpacity > 0.02 && (
