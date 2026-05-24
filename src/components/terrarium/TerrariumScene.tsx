@@ -48,7 +48,7 @@ export function TerrariumScene({ state, width = 560, height = 620 }: Props) {
 
   // Substrate sits inside the curved bottom — narrower than full interior
   // because the bowl curves inward toward the base.
-  const subInset = 0.12;
+  const subInset = 0.18;
   const subX = intX + intW * subInset;
   const subW = intW * (1 - subInset * 2);
   const substrateH = 64;
@@ -204,13 +204,21 @@ export function TerrariumScene({ state, width = 560, height = 620 }: Props) {
         style={{ zIndex: 40 }}
       />
 
-      {/* Glass specular highlight (sits on top of contents, below condensation) */}
-      <img
-        src={ASSETS.glassHighlight}
-        alt=""
-        draggable={false}
-        className="absolute inset-0 w-full h-full pointer-events-none"
-        style={{ zIndex: 42, opacity: 0.55, mixBlendMode: "screen" }}
+      {/* CSS-painted glass specular highlight on the upper-left of the bowl */}
+      <div
+        className="absolute pointer-events-none"
+        style={{
+          left: intX + intW * 0.05,
+          top: intY + intH * 0.05,
+          width: intW * 0.45,
+          height: intH * 0.55,
+          borderRadius: "50%",
+          background:
+            "radial-gradient(ellipse at 35% 30%, oklch(1 0 0 / 0.55), transparent 60%)",
+          filter: "blur(2px)",
+          zIndex: 42,
+          mixBlendMode: "screen",
+        }}
       />
 
       {/* Condensation overlay (inside glass) */}
