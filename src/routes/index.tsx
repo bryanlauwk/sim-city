@@ -1,37 +1,76 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Play, Pause, FastForward, RotateCcw, Sprout, Bug, Droplets, Sun, Leaf, Skull, Trophy } from "lucide-react";
+import {
+  Play,
+  Pause,
+  FastForward,
+  RotateCcw,
+  Sprout,
+  Droplets,
+  Sun,
+  Leaf,
+  Skull,
+  Trophy,
+  Minus,
+  Plus,
+  Check,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { TerrariumCanvas } from "@/components/terrarium/TerrariumCanvas";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { TerrariumScene } from "@/components/terrarium/TerrariumScene";
+import { ASSETS } from "@/components/terrarium/assets";
 import { FAUNA, PLANTS, SUBSTRATES } from "@/lib/terrarium/species";
-import { createInitialState, defaultRecipe, tick } from "@/lib/terrarium/simulation";
-import type { FaunaId, PlantId, Recipe, SimState, SubstrateId } from "@/lib/terrarium/types";
+import {
+  createInitialState,
+  defaultRecipe,
+  tick,
+} from "@/lib/terrarium/simulation";
+import type {
+  FaunaId,
+  PlantId,
+  Recipe,
+  SimState,
+  SubstrateId,
+} from "@/lib/terrarium/types";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
   component: Index,
   head: () => ({
     meta: [
-      { title: "Terrarium Simulator — Cozy Pixel Ecosystem Balancer" },
-      { name: "description", content: "Build a sealed glass terrarium, balance moisture, plants, and bugs, and survive 365 simulated days." },
+      { title: "Terrarium — A Cozy Ecosystem Balancer" },
+      {
+        name: "description",
+        content:
+          "Compose a sealed glass jar with soil, plants, micro-fauna and air. Watch a living ecosystem unfold and try to survive 365 days.",
+      },
     ],
   }),
 });
 
+type Phase = "setup" | "running" | "ended";
+
 function Index() {
   const [recipe, setRecipe] = useState<Recipe>(defaultRecipe);
-  const [phase, setPhase] = useState<"setup" | "running" | "ended">("setup");
+  const [phase, setPhase] = useState<Phase>("setup");
   const [speed, setSpeed] = useState<0 | 1 | 8 | 32>(1);
-  const [state, setState] = useState<SimState>(() => createInitialState(defaultRecipe()));
+  const [state, setState] = useState<SimState>(() =>
+    createInitialState(defaultRecipe()),
+  );
   const [bestDay, setBestDay] = useState<number>(() => {
     if (typeof window === "undefined") return 0;
     return Number(localStorage.getItem("terrarium-best") || 0);
   });
 
-  // Simulation loop
   const accRef = useRef(0);
   const lastRef = useRef<number>(0);
   useEffect(() => {
@@ -41,7 +80,6 @@ function Index() {
     const loop = (now: number) => {
       const dt = now - lastRef.current;
       lastRef.current = now;
-      // ticksPerSecond: 1× = 4, 8× = 32, 32× = 128
       const tps = speed * 4;
       accRef.current += (dt / 1000) * tps;
       if (accRef.current >= 1) {
@@ -50,16 +88,12 @@ function Index() {
         setState((s) => {
           let next = s;
           for (let i = 0; i < n; i++) next = tick(next);
-          if (next.collapsed) {
+          if (next.collapsed || next.day >= 365) {
             setPhase("ended");
             const best = Math.max(bestDay, next.day);
             setBestDay(best);
-            if (typeof window !== "undefined") localStorage.setItem("terrarium-best", String(best));
-          } else if (next.day >= 365) {
-            setPhase("ended");
-            const best = Math.max(bestDay, next.day);
-            setBestDay(best);
-            if (typeof window !== "undefined") localStorage.setItem("terrarium-best", String(best));
+            if (typeof window !== "undefined")
+              localStorage.setItem("terrarium-best", String(best));
           }
           return next;
         });
@@ -86,71 +120,77 @@ function Index() {
 
   return (
     <div className="min-h-screen w-full">
-      <header className="border-b border-border/60 bg-card/60 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
-          <div className="flex items-center gap-3">
-            <div className="grid h-9 w-9 place-items-center rounded-md bg-primary text-primary-foreground">
-              <Sprout className="h-5 w-5" />
-            </div>
-            <div>
-              <h1 className="font-pixel text-sm leading-none text-foreground">TERRARIUM</h1>
-              <p className="font-display text-base leading-tight text-muted-foreground">a cozy ecosystem balancer</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 text-sm">
-            <Trophy className="h-4 w-4 text-accent" />
-            <span className="font-display text-lg">Best: <strong>{bestDay}</strong> days</span>
-          </div>
-        </div>
-      </header>
+      <Header bestDay={bestDay} day={state.day} phase={phase} />
 
-      <main className="mx-auto grid max-w-7xl gap-4 px-4 py-6 lg:grid-cols-[300px_1fr_260px]">
-        {/* Left: selection */}
-        <SelectionPanel recipe={recipe} setRecipe={setRecipe} phase={phase} forecast={forecast} onSeal={seal} />
+      <main className="mx-auto grid max-w-[1400px] gap-6 px-6 py-6 lg:grid-cols-[340px_1fr_300px]">
+        <SelectionPanel
+          recipe={recipe}
+          setRecipe={setRecipe}
+          phase={phase}
+          forecast={forecast}
+          onSeal={seal}
+        />
 
-        {/* Center: jar + controls */}
-        <section className="flex flex-col items-center gap-4">
-          <div className="rounded-xl border-4 border-foreground/80 bg-card p-3 shadow-[8px_8px_0_0_rgba(50,30,10,0.25)]">
-            <TerrariumCanvas state={state} />
-          </div>
+        <section className="flex flex-col items-center gap-5">
+          <SceneFrame>
+            <TerrariumScene state={state} />
+          </SceneFrame>
           <Controls
             phase={phase}
             speed={speed}
             setSpeed={setSpeed}
-            onSeal={seal}
             onReset={reset}
           />
         </section>
 
-        {/* Right: HUD */}
         <HUD state={state} phase={phase} />
       </main>
 
       <Dialog open={phase === "ended"} onOpenChange={(o) => !o && reset()}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-pixel text-base">
-              {state.day >= 365 ? (
-                <span className="text-primary">SELF-SUSTAINING BIOME</span>
-              ) : (
-                <span className="text-destructive flex items-center gap-2"><Skull className="h-4 w-4" /> ECOSYSTEM COLLAPSED</span>
-              )}
-            </DialogTitle>
-            <DialogDescription className="font-display text-lg leading-snug">
+            <div className="flex flex-col items-center gap-1 pt-2">
+              <div className="text-xs uppercase tracking-[0.25em] text-muted-foreground">
+                {state.day >= 365 ? "Certificate" : "Field report"}
+              </div>
+              <DialogTitle asChild>
+                <h2 className="font-serif-d text-3xl">
+                  {state.day >= 365 ? (
+                    <span className="text-primary">A self-sustaining biome</span>
+                  ) : (
+                    <span className="text-destructive flex items-center gap-2">
+                      <Skull className="h-5 w-5" /> Ecosystem collapsed
+                    </span>
+                  )}
+                </h2>
+              </DialogTitle>
+              <div className="h-px w-16 bg-border mt-2" />
+            </div>
+            <DialogDescription className="text-center font-serif-d text-base leading-snug pt-2 text-foreground/80">
               {state.day >= 365
-                ? "Your terrarium reached a full year of stable balance. A tiny, perfect world."
+                ? "Your terrarium reached a full year of balance — a tiny perfect world, sealed and thriving."
                 : state.collapseReason}
             </DialogDescription>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-3 py-2">
+          <div className="grid grid-cols-2 gap-3 py-3">
             <Stat label="Days survived" value={state.day} />
             <Stat label="Biodiversity" value={Math.round(state.biodiversity)} />
             <Stat label="Final moisture" value={`${Math.round(state.moisture)}%`} />
             <Stat label="Plants alive" value={state.plants.filter((p) => !p.dead).length} />
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setPhase("setup"); }}>Tweak recipe</Button>
-            <Button onClick={() => { setState(createInitialState(recipe)); setPhase("running"); setSpeed(1); }}>Try again</Button>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => setPhase("setup")}>
+              Tweak recipe
+            </Button>
+            <Button
+              onClick={() => {
+                setState(createInitialState(recipe));
+                setPhase("running");
+                setSpeed(1);
+              }}
+            >
+              Try again
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -158,15 +198,73 @@ function Index() {
   );
 }
 
-function Stat({ label, value }: { label: string; value: number | string }) {
+/* -------- Header -------- */
+function Header({ bestDay, day, phase }: { bestDay: number; day: number; phase: Phase }) {
   return (
-    <div className="rounded-md border border-border bg-muted/40 px-3 py-2">
-      <div className="font-pixel text-[9px] uppercase text-muted-foreground">{label}</div>
-      <div className="font-display text-2xl leading-none">{value}</div>
+    <header className="border-b border-border/60 bg-card/50 backdrop-blur-xl">
+      <div className="mx-auto flex max-w-[1400px] items-center justify-between px-6 py-4">
+        <div className="flex items-center gap-3">
+          <div className="grid h-10 w-10 place-items-center rounded-full border border-[var(--brass)] bg-card text-[var(--brass-deep)]">
+            <Sprout className="h-5 w-5" />
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+              Vol. I · 2026
+            </div>
+            <h1 className="font-serif-d text-2xl leading-none">
+              <span className="italic font-light">the</span>{" "}
+              <span className="font-medium">Terrarium</span>
+            </h1>
+          </div>
+        </div>
+        <div className="flex items-center gap-6">
+          {phase === "running" && (
+            <Chip label="Today" value={`Day ${day}`} />
+          )}
+          <Chip
+            icon={<Trophy className="h-3.5 w-3.5 text-[var(--brass-deep)]" />}
+            label="Personal best"
+            value={`${bestDay} d`}
+          />
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function Chip({
+  icon,
+  label,
+  value,
+}: {
+  icon?: React.ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1.5">
+      {icon}
+      <div className="leading-tight">
+        <div className="text-[9px] uppercase tracking-[0.2em] text-muted-foreground">
+          {label}
+        </div>
+        <div className="font-serif-d text-sm">{value}</div>
+      </div>
     </div>
   );
 }
 
+/* -------- Scene frame -------- */
+function SceneFrame({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="relative rounded-3xl border border-border bg-card/40 p-6 backdrop-blur-md shadow-[0_20px_60px_-30px_oklch(0.3_0.05_120/0.4)]">
+      <div className="absolute inset-3 rounded-2xl border border-border/50 pointer-events-none" />
+      {children}
+    </div>
+  );
+}
+
+/* -------- Selection -------- */
 function SelectionPanel({
   recipe,
   setRecipe,
@@ -176,7 +274,7 @@ function SelectionPanel({
 }: {
   recipe: Recipe;
   setRecipe: (r: Recipe) => void;
-  phase: "setup" | "running" | "ended";
+  phase: Phase;
   forecast: { label: string; tone: "good" | "risk" | "doom" };
   onSeal: () => void;
 }) {
@@ -198,253 +296,409 @@ function SelectionPanel({
   };
 
   return (
-    <aside className="rounded-xl border-2 border-foreground/70 bg-card p-3 shadow-[4px_4px_0_0_rgba(50,30,10,0.2)]">
-      <h2 className="font-pixel text-[10px] uppercase tracking-wider text-muted-foreground">Build your jar</h2>
-      <Tabs defaultValue="substrate" className="mt-2">
-        <TabsList className="grid w-full grid-cols-4 bg-muted/60">
-          <TabsTrigger value="substrate" className="text-xs">Soil</TabsTrigger>
-          <TabsTrigger value="plants" className="text-xs">Flora</TabsTrigger>
-          <TabsTrigger value="fauna" className="text-xs">Fauna</TabsTrigger>
-          <TabsTrigger value="atmos" className="text-xs">Air</TabsTrigger>
+    <aside className="rounded-3xl border border-border bg-card/60 p-5 backdrop-blur-md shadow-[0_10px_30px_-20px_oklch(0.3_0.05_120/0.3)]">
+      <div className="mb-4">
+        <div className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+          Composition
+        </div>
+        <h2 className="font-serif-d text-2xl leading-tight mt-1">Build your jar</h2>
+      </div>
+
+      <Tabs defaultValue="substrate">
+        <TabsList className="grid w-full grid-cols-4 bg-muted/60 rounded-full p-1 h-10">
+          {[
+            ["substrate", "Soil"],
+            ["plants", "Flora"],
+            ["fauna", "Fauna"],
+            ["atmos", "Air"],
+          ].map(([v, l]) => (
+            <TabsTrigger
+              key={v}
+              value={v}
+              className="rounded-full data-[state=active]:bg-card data-[state=active]:shadow-sm font-serif-d text-base"
+            >
+              {l}
+            </TabsTrigger>
+          ))}
         </TabsList>
 
-        <TabsContent value="substrate" className="mt-3 space-y-2">
+        <TabsContent value="substrate" className="mt-4 space-y-2">
           {SUBSTRATES.map((s) => (
-            <button
+            <IngredientCard
               key={s.id}
+              image={ASSETS.substrate[s.id]}
+              name={s.name}
+              blurb={s.blurb}
+              selected={recipe.substrate === s.id}
               disabled={disabled}
               onClick={() => setRecipe({ ...recipe, substrate: s.id as SubstrateId })}
-              className={cn(
-                "flex w-full items-center gap-2 rounded-md border p-2 text-left transition disabled:opacity-60",
-                recipe.substrate === s.id ? "border-primary bg-primary/10" : "border-border hover:border-foreground/50",
-              )}
-            >
-              <span className="h-6 w-6 rounded-sm border border-foreground/40" style={{ background: s.color }} />
-              <span className="flex-1">
-                <span className="block font-pixel text-[10px]">{s.name}</span>
-                <span className="block text-xs text-muted-foreground">{s.blurb}</span>
-              </span>
-            </button>
+            />
           ))}
         </TabsContent>
 
-        <TabsContent value="plants" className="mt-3 space-y-2">
-          <p className="text-xs text-muted-foreground">Pick 1–5 plants ({recipe.plants.length}/5)</p>
+        <TabsContent value="plants" className="mt-4 space-y-2">
+          <p className="text-xs text-muted-foreground italic mb-2">
+            Choose one to five plants · {recipe.plants.length}/5
+          </p>
           {PLANTS.map((p) => {
             const active = recipe.plants.includes(p.id);
             return (
-              <button
+              <IngredientCard
                 key={p.id}
+                image={ASSETS.plant[p.id]}
+                name={p.name}
+                blurb={`moisture ${p.moistureMin}–${p.moistureMax} · light ≥${p.lightMin}h`}
+                selected={active}
                 disabled={disabled}
                 onClick={() => togglePlant(p.id)}
-                className={cn(
-                  "flex w-full items-center gap-2 rounded-md border p-2 text-left transition disabled:opacity-60",
-                  active ? "border-primary bg-primary/10" : "border-border hover:border-foreground/50",
-                )}
-              >
-                <span className="grid h-6 w-6 place-items-center rounded-sm" style={{ background: p.color, color: p.accent }}>
-                  <Leaf className="h-3 w-3" />
-                </span>
-                <span className="flex-1">
-                  <span className="block font-pixel text-[10px]">{p.name}</span>
-                  <span className="block text-xs text-muted-foreground">
-                    moist {p.moistureMin}–{p.moistureMax} · light ≥{p.lightMin}h
-                  </span>
-                </span>
-              </button>
+              />
             );
           })}
         </TabsContent>
 
-        <TabsContent value="fauna" className="mt-3 space-y-2">
+        <TabsContent value="fauna" className="mt-4 space-y-2">
           {FAUNA.map((f) => {
             const count = recipe.fauna[f.id] ?? 0;
             return (
-              <div key={f.id} className="rounded-md border border-border p-2">
-                <div className="flex items-center gap-2">
-                  <span className="grid h-6 w-6 place-items-center rounded-sm bg-muted" style={{ color: f.color }}>
-                    <Bug className="h-3 w-3" />
-                  </span>
-                  <div className="flex-1">
-                    <div className="font-pixel text-[10px]">{f.name}</div>
-                    <div className="text-xs text-muted-foreground">{f.blurb}</div>
+              <div
+                key={f.id}
+                className="rounded-2xl border border-border bg-card/80 p-3 flex items-center gap-3"
+              >
+                <div className="h-14 w-14 rounded-xl overflow-hidden bg-muted/60 grid place-items-center shrink-0">
+                  <img
+                    src={ASSETS.fauna[f.id]}
+                    alt={f.name}
+                    className="h-full w-full object-contain p-1"
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-serif-d text-base leading-tight">{f.name}</div>
+                  <div className="text-xs text-muted-foreground leading-snug italic">
+                    {f.blurb}
                   </div>
                 </div>
-                <div className="mt-2 flex items-center gap-2">
-                  <Button size="sm" variant="outline" disabled={disabled} onClick={() => bumpFauna(f.id, -1)} className="h-7 w-7 p-0">−</Button>
-                  <span className="font-display text-xl w-6 text-center">{count}</span>
-                  <Button size="sm" variant="outline" disabled={disabled} onClick={() => bumpFauna(f.id, 1)} className="h-7 w-7 p-0">+</Button>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    disabled={disabled}
+                    onClick={() => bumpFauna(f.id, -1)}
+                    className="h-7 w-7 grid place-items-center rounded-full border border-border bg-card hover:bg-muted disabled:opacity-40"
+                  >
+                    <Minus className="h-3.5 w-3.5" />
+                  </button>
+                  <span className="font-serif-d text-lg w-6 text-center tabular-nums">
+                    {count}
+                  </span>
+                  <button
+                    disabled={disabled}
+                    onClick={() => bumpFauna(f.id, 1)}
+                    className="h-7 w-7 grid place-items-center rounded-full border border-border bg-card hover:bg-muted disabled:opacity-40"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </button>
                 </div>
               </div>
             );
           })}
         </TabsContent>
 
-        <TabsContent value="atmos" className="mt-3 space-y-4">
-          <div>
-            <div className="mb-2 flex items-center justify-between">
-              <span className="font-pixel text-[10px] flex items-center gap-1"><Droplets className="h-3 w-3" /> Humidity</span>
-              <span className="font-display text-lg">{recipe.humidity}%</span>
-            </div>
-            <Slider
-              disabled={disabled}
-              value={[recipe.humidity]}
-              onValueChange={([v]) => setRecipe({ ...recipe, humidity: v })}
-              min={10}
-              max={100}
-              step={1}
-            />
-          </div>
-          <div>
-            <div className="mb-2 flex items-center justify-between">
-              <span className="font-pixel text-[10px] flex items-center gap-1"><Sun className="h-3 w-3" /> Light hours</span>
-              <span className="font-display text-lg">{recipe.light}h</span>
-            </div>
-            <Slider
-              disabled={disabled}
-              value={[recipe.light]}
-              onValueChange={([v]) => setRecipe({ ...recipe, light: v })}
-              min={0}
-              max={16}
-              step={1}
-            />
-          </div>
+        <TabsContent value="atmos" className="mt-5 space-y-6">
+          <AtmoSlider
+            icon={<Droplets className="h-4 w-4" />}
+            label="Humidity"
+            value={recipe.humidity}
+            min={10}
+            max={100}
+            suffix="%"
+            onChange={(v) => setRecipe({ ...recipe, humidity: v })}
+            disabled={disabled}
+          />
+          <AtmoSlider
+            icon={<Sun className="h-4 w-4" />}
+            label="Light"
+            value={recipe.light}
+            min={0}
+            max={16}
+            suffix="h"
+            onChange={(v) => setRecipe({ ...recipe, light: v })}
+            disabled={disabled}
+          />
         </TabsContent>
       </Tabs>
 
-      <div className="mt-4 space-y-2">
-        <div className={cn(
-          "rounded-md border-2 px-3 py-2 text-center font-pixel text-[10px]",
-          forecast.tone === "good" && "border-primary bg-primary/10 text-primary",
-          forecast.tone === "risk" && "border-accent bg-accent/10 text-accent-foreground",
-          forecast.tone === "doom" && "border-destructive bg-destructive/10 text-destructive",
-        )}>
-          FORECAST · {forecast.label}
+      <div className="mt-6 space-y-3">
+        <div
+          className={cn(
+            "flex items-center justify-between rounded-full border px-4 py-2 text-sm",
+            forecast.tone === "good" &&
+              "border-primary/40 bg-primary/5 text-primary",
+            forecast.tone === "risk" &&
+              "border-[var(--brass)]/50 bg-[var(--brass)]/10 text-[var(--brass-deep)]",
+            forecast.tone === "doom" &&
+              "border-destructive/40 bg-destructive/5 text-destructive",
+          )}
+        >
+          <span className="text-[10px] uppercase tracking-[0.25em] opacity-70">
+            Forecast
+          </span>
+          <span className="font-serif-d italic">{forecast.label}</span>
         </div>
         <Button
-          className="w-full font-pixel text-[10px]"
+          className="w-full h-12 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 font-serif-d text-base tracking-wide"
           disabled={disabled || recipe.plants.length === 0}
           onClick={onSeal}
         >
-          SEAL THE JAR
+          <Check className="h-4 w-4 mr-1" /> Seal the jar
         </Button>
       </div>
     </aside>
   );
 }
 
-function Controls({
-  phase,
-  speed,
-  setSpeed,
-  onSeal,
-  onReset,
+function IngredientCard({
+  image,
+  name,
+  blurb,
+  selected,
+  disabled,
+  onClick,
 }: {
-  phase: "setup" | "running" | "ended";
-  speed: 0 | 1 | 8 | 32;
-  setSpeed: (s: 0 | 1 | 8 | 32) => void;
-  onSeal: () => void;
-  onReset: () => void;
+  image: string;
+  name: string;
+  blurb: string;
+  selected: boolean;
+  disabled: boolean;
+  onClick: () => void;
 }) {
-  if (phase === "setup") {
-    return (
-      <div className="font-display text-lg text-muted-foreground">
-        Pick your ingredients, then press <strong>SEAL THE JAR</strong>.
-      </div>
-    );
-  }
   return (
-    <div className="flex items-center gap-2 rounded-lg border-2 border-foreground/70 bg-card px-3 py-2 shadow-[3px_3px_0_0_rgba(50,30,10,0.2)]">
-      <Button
-        variant={speed === 0 ? "default" : "outline"}
-        size="sm"
-        onClick={() => setSpeed(0)}
-        title="Pause"
-      >
-        <Pause className="h-4 w-4" />
-      </Button>
-      <Button variant={speed === 1 ? "default" : "outline"} size="sm" onClick={() => setSpeed(1)}>
-        <Play className="h-4 w-4" />
-        <span className="ml-1 font-display">1×</span>
-      </Button>
-      <Button variant={speed === 8 ? "default" : "outline"} size="sm" onClick={() => setSpeed(8)}>
-        <FastForward className="h-4 w-4" />
-        <span className="ml-1 font-display">8×</span>
-      </Button>
-      <Button variant={speed === 32 ? "default" : "outline"} size="sm" onClick={() => setSpeed(32)}>
-        <FastForward className="h-4 w-4" />
-        <span className="ml-1 font-display">32×</span>
-      </Button>
-      <span className="mx-2 h-6 w-px bg-border" />
-      <Button variant="ghost" size="sm" onClick={onReset} title="Reset and tweak recipe">
-        <RotateCcw className="h-4 w-4" />
-      </Button>
+    <button
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        "w-full flex items-center gap-3 rounded-2xl border bg-card/80 p-3 text-left transition-all disabled:opacity-60",
+        selected
+          ? "border-[var(--brass)] shadow-[inset_0_0_0_1px_var(--brass),0_4px_18px_-8px_oklch(0.6_0.1_75/0.4)]"
+          : "border-border hover:border-foreground/30",
+      )}
+    >
+      <div className="h-14 w-14 rounded-xl overflow-hidden bg-muted/50 grid place-items-center shrink-0">
+        <img src={image} alt={name} className="h-full w-full object-contain p-1" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="font-serif-d text-base leading-tight">{name}</div>
+        <div className="text-xs text-muted-foreground italic leading-snug truncate">
+          {blurb}
+        </div>
+      </div>
+      {selected && (
+        <div className="h-5 w-5 rounded-full bg-[var(--brass)] text-card grid place-items-center shrink-0">
+          <Check className="h-3 w-3" strokeWidth={3} />
+        </div>
+      )}
+    </button>
+  );
+}
+
+function AtmoSlider({
+  icon,
+  label,
+  value,
+  min,
+  max,
+  suffix,
+  onChange,
+  disabled,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  suffix: string;
+  onChange: (v: number) => void;
+  disabled: boolean;
+}) {
+  return (
+    <div>
+      <div className="mb-2 flex items-baseline justify-between">
+        <span className="flex items-center gap-2 text-sm">
+          <span className="text-[var(--brass-deep)]">{icon}</span>
+          <span className="font-serif-d text-base">{label}</span>
+        </span>
+        <span className="font-serif-d text-2xl tabular-nums">
+          {value}
+          <span className="text-sm text-muted-foreground ml-0.5">{suffix}</span>
+        </span>
+      </div>
+      <Slider
+        disabled={disabled}
+        value={[value]}
+        onValueChange={([v]) => onChange(v)}
+        min={min}
+        max={max}
+        step={1}
+      />
     </div>
   );
 }
 
-function HUD({ state, phase }: { state: SimState; phase: "setup" | "running" | "ended" }) {
+/* -------- Controls -------- */
+function Controls({
+  phase,
+  speed,
+  setSpeed,
+  onReset,
+}: {
+  phase: Phase;
+  speed: 0 | 1 | 8 | 32;
+  setSpeed: (s: 0 | 1 | 8 | 32) => void;
+  onReset: () => void;
+}) {
+  if (phase === "setup") {
+    return (
+      <div className="font-serif-d italic text-lg text-muted-foreground">
+        Compose your jar, then press <span className="text-foreground not-italic">Seal the jar</span>.
+      </div>
+    );
+  }
+  const btn = (active: boolean) =>
+    cn(
+      "h-10 px-4 rounded-full transition-all flex items-center gap-1.5 font-serif-d text-sm",
+      active
+        ? "bg-foreground text-background shadow-md"
+        : "text-foreground/70 hover:text-foreground hover:bg-muted/60",
+    );
+  return (
+    <div className="flex items-center gap-1 rounded-full border border-border bg-card/80 backdrop-blur-md p-1.5 shadow-[0_8px_24px_-12px_oklch(0.3_0.05_120/0.3)]">
+      <button onClick={() => setSpeed(0)} className={btn(speed === 0)} title="Pause">
+        <Pause className="h-4 w-4" />
+      </button>
+      <button onClick={() => setSpeed(1)} className={btn(speed === 1)}>
+        <Play className="h-4 w-4" /> 1×
+      </button>
+      <button onClick={() => setSpeed(8)} className={btn(speed === 8)}>
+        <FastForward className="h-4 w-4" /> 8×
+      </button>
+      <button onClick={() => setSpeed(32)} className={btn(speed === 32)}>
+        <FastForward className="h-4 w-4" /> 32×
+      </button>
+      <div className="mx-1 h-6 w-px bg-border" />
+      <button onClick={onReset} className={btn(false)} title="Restart">
+        <RotateCcw className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
+/* -------- HUD -------- */
+function HUD({ state, phase }: { state: SimState; phase: Phase }) {
   const livePlants = state.plants.filter((p) => !p.dead).length;
   const liveFauna = state.fauna.filter((f) => f.alive).length;
   return (
-    <aside className="rounded-xl border-2 border-foreground/70 bg-card p-3 shadow-[4px_4px_0_0_rgba(50,30,10,0.2)]">
-      <h2 className="font-pixel text-[10px] uppercase tracking-wider text-muted-foreground">Vitals</h2>
+    <aside className="rounded-3xl border border-border bg-card/60 p-5 backdrop-blur-md shadow-[0_10px_30px_-20px_oklch(0.3_0.05_120/0.3)]">
+      <div className="mb-4">
+        <div className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+          Field readings
+        </div>
+        <h2 className="font-serif-d text-2xl leading-tight mt-1">Vitals</h2>
+      </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-2 mb-5">
         <Stat label="Day" value={state.day} />
-        <Stat label="Bio" value={Math.round(state.biodiversity)} />
+        <Stat label="Biodiversity" value={Math.round(state.biodiversity)} />
       </div>
 
-      <div className="mt-4 space-y-3">
-        <Bar label="Moisture" value={state.moisture} tint="hsl(200 60% 50%)" />
-        <Bar label="Humidity" value={state.humidity} tint="hsl(190 50% 55%)" />
-        <Bar label="Nutrients" value={state.nutrients} tint="hsl(40 70% 50%)" />
-        <Bar label="Mold" value={state.moldCover} tint="hsl(60 10% 70%)" danger />
+      <div className="space-y-4">
+        <Bar label="Moisture" value={state.moisture} tint="oklch(0.55 0.12 220)" />
+        <Bar label="Humidity" value={state.humidity} tint="oklch(0.6 0.1 200)" />
+        <Bar label="Nutrients" value={state.nutrients} tint="oklch(0.55 0.12 70)" />
+        <Bar label="Mold" value={state.moldCover} tint="oklch(0.7 0.03 100)" danger />
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-2">
-        <Stat label="Plants" value={livePlants} />
+      <div className="mt-5 grid grid-cols-2 gap-2">
+        <Stat icon={<Leaf className="h-3.5 w-3.5" />} label="Plants" value={livePlants} />
         <Stat label="Fauna" value={liveFauna} />
       </div>
 
       {phase === "running" && (
-        <p className="mt-4 font-display text-base text-muted-foreground">
-          Hour {state.hour}:00 · keep it balanced.
+        <p className="mt-5 text-xs text-muted-foreground italic">
+          Hour {String(state.hour).padStart(2, "0")}:00 — observe quietly.
         </p>
       )}
     </aside>
   );
 }
 
-function Bar({ label, value, tint, danger = false }: { label: string; value: number; tint: string; danger?: boolean }) {
+function Stat({
+  label,
+  value,
+  icon,
+}: {
+  label: string;
+  value: number | string;
+  icon?: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border border-border bg-card/70 px-3 py-2.5">
+      <div className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.2em] text-muted-foreground">
+        {icon}
+        {label}
+      </div>
+      <div className="font-serif-d text-2xl leading-none mt-1 tabular-nums">
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function Bar({
+  label,
+  value,
+  tint,
+  danger = false,
+}: {
+  label: string;
+  value: number;
+  tint: string;
+  danger?: boolean;
+}) {
   const v = Math.max(0, Math.min(100, value));
+  const color = danger && v > 50 ? "oklch(0.55 0.18 28)" : tint;
   return (
     <div>
-      <div className="mb-1 flex items-center justify-between text-xs">
-        <span className="font-pixel text-[9px] uppercase text-muted-foreground">{label}</span>
-        <span className="font-display text-base">{Math.round(v)}</span>
+      <div className="mb-1.5 flex items-baseline justify-between">
+        <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+          {label}
+        </span>
+        <span className="font-serif-d text-base tabular-nums">{Math.round(v)}</span>
       </div>
-      <div className="h-3 w-full overflow-hidden rounded-sm border border-foreground/50 bg-muted">
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
         <div
-          className="h-full transition-[width] duration-200"
-          style={{ width: `${v}%`, background: danger && v > 50 ? "hsl(0 60% 55%)" : tint }}
+          className="h-full rounded-full transition-[width] duration-300"
+          style={{ width: `${v}%`, background: color }}
         />
       </div>
     </div>
   );
 }
 
-function getForecast(recipe: Recipe): { label: string; tone: "good" | "risk" | "doom" } {
+/* -------- Forecast -------- */
+function getForecast(recipe: Recipe): {
+  label: string;
+  tone: "good" | "risk" | "doom";
+} {
   if (recipe.plants.length === 0) return { label: "Empty jar", tone: "doom" };
-  // very rough heuristic mirroring the sim
   const hasSpringtail = (recipe.fauna.springtail ?? 0) > 0;
   const snails = recipe.fauna.snail ?? 0;
   const plantCount = recipe.plants.length;
-  if (recipe.humidity > 85 && !hasSpringtail) return { label: "Mold incoming", tone: "doom" };
+  if (recipe.humidity > 85 && !hasSpringtail)
+    return { label: "Mold incoming", tone: "doom" };
   if (recipe.humidity < 30) return { label: "Too dry", tone: "doom" };
-  if (snails > plantCount) return { label: "Snails will eat everything", tone: "doom" };
-  if (snails > 0 && plantCount < 3) return { label: "Risky — too few plants", tone: "risk" };
-  if (!hasSpringtail && recipe.humidity > 70) return { label: "Risky — needs cleanup crew", tone: "risk" };
+  if (snails > plantCount)
+    return { label: "Snails will eat everything", tone: "doom" };
+  if (snails > 0 && plantCount < 3)
+    return { label: "Risky — too few plants", tone: "risk" };
+  if (!hasSpringtail && recipe.humidity > 70)
+    return { label: "Needs a cleanup crew", tone: "risk" };
   if (recipe.light < 4) return { label: "Risky — low light", tone: "risk" };
   return { label: "Looks balanced", tone: "good" };
 }
