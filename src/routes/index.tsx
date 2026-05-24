@@ -66,10 +66,11 @@ function Index() {
   const [state, setState] = useState<SimState>(() =>
     createInitialState(defaultRecipe()),
   );
-  const [bestDay, setBestDay] = useState<number>(() => {
-    if (typeof window === "undefined") return 0;
-    return Number(localStorage.getItem("terrarium-best") || 0);
-  });
+  const [bestDay, setBestDay] = useState<number>(0);
+  useEffect(() => {
+    const v = Number(localStorage.getItem("terrarium-best") || 0);
+    if (v) setBestDay(v);
+  }, []);
 
   const accRef = useRef(0);
   const lastRef = useRef<number>(0);
@@ -133,7 +134,9 @@ function Index() {
 
         <section className="flex flex-col items-center gap-5">
           <SceneFrame>
-            <TerrariumScene state={state} />
+            <TerrariumScene
+              state={phase === "setup" ? previewState : state}
+            />
           </SceneFrame>
           <Controls
             phase={phase}
