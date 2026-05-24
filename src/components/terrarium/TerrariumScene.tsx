@@ -40,7 +40,7 @@ export function TerrariumScene({ state, width = 560, height = 620 }: Props) {
   // Interior geometry within the jar.png (round jar with cork lid + brass rim).
   // Glass bowl runs roughly from y=0.30 (just under brass) to y=0.86 (bottom),
   // x=0.22..0.80 at the equator.
-  const interior = { left: 0.22, right: 0.80, top: 0.30, bottom: 0.86 };
+  const interior = { left: 0.20, right: 0.80, top: 0.27, bottom: 0.87 };
   const intW = (interior.right - interior.left) * width;
   const intH = (interior.bottom - interior.top) * height;
   const intX = interior.left * width;
