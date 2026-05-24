@@ -70,16 +70,15 @@ export function TerrariumScene({ state, width = 560, height = 620 }: Props) {
         className="absolute inset-0 rounded-2xl"
         style={{
           background:
-            "radial-gradient(ellipse at 30% 40%, oklch(0.78 0.08 140 / 0.55), transparent 60%), radial-gradient(ellipse at 70% 60%, oklch(0.7 0.06 80 / 0.4), transparent 65%), linear-gradient(180deg, oklch(0.92 0.02 130), oklch(0.86 0.03 100))",
-          filter: "blur(0.5px)",
+            "radial-gradient(ellipse at 50% 110%, oklch(0.78 0.05 140 / 0.35), transparent 55%), linear-gradient(180deg, oklch(0.88 0.03 130), oklch(0.82 0.04 110))",
         }}
       />
       <div
         className="absolute inset-0 rounded-2xl pointer-events-none"
         style={{
           background:
-            "radial-gradient(circle at 25% 30%, oklch(0.95 0.03 130 / 0.5), transparent 35%), radial-gradient(circle at 80% 70%, oklch(0.7 0.1 60 / 0.35), transparent 30%)",
-          filter: "blur(20px)",
+            "radial-gradient(circle at 80% 85%, oklch(0.7 0.08 70 / 0.25), transparent 40%)",
+          filter: "blur(24px)",
         }}
       />
 
