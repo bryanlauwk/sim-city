@@ -1,6 +1,7 @@
 @import "tailwindcss" source(none);
 @source "../src";
 @import "tw-animate-css";
+@import url("https://fonts.googleapis.com/css2?family=VT323&family=Press+Start+2P&family=Nunito:wght@400;600;700&display=swap");
 
 @custom-variant dark (&:is(.dark *));
 
@@ -63,25 +64,31 @@
 
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.129 0.042 264.695);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.129 0.042 264.695);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.129 0.042 264.695);
-  --primary: oklch(0.208 0.042 265.755);
-  --primary-foreground: oklch(0.984 0.003 247.858);
-  --secondary: oklch(0.968 0.007 247.896);
-  --secondary-foreground: oklch(0.208 0.042 265.755);
-  --muted: oklch(0.968 0.007 247.896);
-  --muted-foreground: oklch(0.554 0.046 257.417);
-  --accent: oklch(0.968 0.007 247.896);
-  --accent-foreground: oklch(0.208 0.042 265.755);
-  --destructive: oklch(0.577 0.245 27.325);
+  /* Cozy terrarium palette: cream parchment, mossy greens, terracotta, amber */
+  --background: oklch(0.96 0.02 85);
+  --foreground: oklch(0.28 0.04 55);
+  --card: oklch(0.93 0.025 80);
+  --card-foreground: oklch(0.28 0.04 55);
+  --popover: oklch(0.96 0.02 85);
+  --popover-foreground: oklch(0.28 0.04 55);
+  --primary: oklch(0.48 0.12 145);
+  --primary-foreground: oklch(0.97 0.02 85);
+  --secondary: oklch(0.88 0.04 75);
+  --secondary-foreground: oklch(0.28 0.04 55);
+  --muted: oklch(0.9 0.03 80);
+  --muted-foreground: oklch(0.45 0.04 60);
+  --accent: oklch(0.66 0.16 45);
+  --accent-foreground: oklch(0.98 0.01 85);
+  --destructive: oklch(0.55 0.22 30);
   --destructive-foreground: oklch(0.984 0.003 247.858);
-  --border: oklch(0.929 0.013 255.508);
-  --input: oklch(0.929 0.013 255.508);
-  --ring: oklch(0.704 0.04 256.788);
+  --border: oklch(0.78 0.04 70);
+  --input: oklch(0.88 0.03 75);
+  --ring: oklch(0.48 0.12 145);
+  --moss: oklch(0.55 0.14 145);
+  --leaf: oklch(0.65 0.18 135);
+  --soil: oklch(0.35 0.05 50);
+  --amber: oklch(0.75 0.15 75);
+  --glass: oklch(0.92 0.04 200 / 60%);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -140,5 +147,24 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
+    font-family: "Nunito", system-ui, sans-serif;
+    background-image:
+      radial-gradient(circle at 20% 10%, oklch(0.92 0.04 90) 0, transparent 40%),
+      radial-gradient(circle at 80% 90%, oklch(0.9 0.05 130) 0, transparent 45%);
+  }
+
+  .font-pixel {
+    font-family: "Press Start 2P", monospace;
+    letter-spacing: 0.02em;
+  }
+
+  .font-display {
+    font-family: "VT323", monospace;
+    letter-spacing: 0.04em;
+  }
+
+  canvas.pixelated {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
   }
 }
