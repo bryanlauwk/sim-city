@@ -1,25 +1,25 @@
 import { z } from "zod";
-import { BUILD_KINDS, TILE_OPS, TILE_TARGETS, type EventResult } from "./types";
-
-const LANDMARK_SHAPES = [
-  "tower",
-  "dome",
-  "pyramid",
-  "statue",
-  "crater",
-  "blob",
-  "spire",
-  "arch",
-] as const;
+import {
+  ACTOR_KINDS,
+  ACTOR_SHAPES,
+  BUILD_KINDS,
+  CROWD_REACTIONS,
+  LANDMARK_SHAPES,
+  RESPONDERS,
+  TILE_OPS,
+  TILE_TARGETS,
+  type EventResult,
+  type Spectacle,
+} from "./types";
 
 const clampNum = (lo: number, hi: number) =>
   z.number().transform((v) => (Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : 0));
 const text = (max: number) => z.string().transform((v) => v.trim().slice(0, max));
 
 const statDeltas = z.object({
-  population: clampNum(-50000, 50000),
+  population: clampNum(-2_000_000, 2_000_000),
   happiness: clampNum(-60, 60),
-  money: clampNum(-100000, 100000),
+  money: clampNum(-50_000_000, 50_000_000),
   pollution: clampNum(-60, 60),
   chaos: clampNum(-60, 60),
 });
@@ -34,6 +34,44 @@ const landmark = z.object({
   height: clampNum(0.3, 4),
 });
 
+const hexColor = (fallback: string) =>
+  z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .catch(fallback);
+
+const tileOp = z.object({
+  op: z.enum(TILE_OPS),
+  target: z.enum(TILE_TARGETS).catch("random"),
+  count: clampNum(1, 30),
+  build_kind: z.enum(BUILD_KINDS).nullable().catch(null),
+  landmark: landmark.nullable().catch(null),
+});
+
+const NO_SPECTACLE: Spectacle = { actors: [], crowd: "ignore", responders: [] };
+
+const spectacle = z
+  .object({
+    actors: z
+      .array(
+        z.object({
+          kind: z.enum(ACTOR_KINDS),
+          label: text(40),
+          color: hexColor("#888888"),
+          size: clampNum(1, 8),
+          count: clampNum(1, 60),
+          shape: z.enum(ACTOR_SHAPES).catch("blob"),
+        }),
+      )
+      .transform((a) => a.slice(0, 3)),
+    crowd: z.enum(CROWD_REACTIONS).catch("ignore"),
+    responders: z
+      .array(z.enum(RESPONDERS))
+      .transform((r) => [...new Set(r)].slice(0, 3))
+      .catch([]),
+  })
+  .catch(NO_SPECTACLE);
+
 /**
  * Validates (and clamps) an event result, whether it came from Claude or
  * from a share link someone pasted.
@@ -46,21 +84,24 @@ export const eventResultSchema = z.object({
     .array(z.object({ name: text(40), role: text(60), text: text(240) }))
     .transform((q) => q.slice(0, 3)),
   stat_changes: statDeltas,
-  tile_ops: z
-    .array(
-      z.object({
-        op: z.enum(TILE_OPS),
-        target: z.enum(TILE_TARGETS).catch("random"),
-        count: clampNum(1, 24),
-        build_kind: z.enum(BUILD_KINDS).nullable().catch(null),
-        landmark: landmark.nullable().catch(null),
-      }),
-    )
-    .transform((ops) => ops.slice(0, 6)),
+  tile_ops: z.array(tileOp).transform((ops) => ops.slice(0, 6)),
   ongoing: z
     .object({ label: text(60), duration_days: clampNum(1, 30), per_day: statDeltas })
     .nullable()
     .catch(null),
+  spectacle: spectacle.default(NO_SPECTACLE),
+  followups: z
+    .array(
+      z.object({
+        delay_days: clampNum(1, 10),
+        note: text(160),
+        stat_changes: statDeltas,
+        tile_ops: z.array(tileOp).transform((ops) => ops.slice(0, 4)),
+      }),
+    )
+    .transform((f) => f.slice(0, 3))
+    .catch([])
+    .default([]),
 }) satisfies z.ZodType<EventResult, z.ZodTypeDef, unknown>;
 
 const statsJson = {
@@ -73,6 +114,34 @@ const statsJson = {
     chaos: { type: "integer" },
   },
   required: ["population", "happiness", "money", "pollution", "chaos"],
+  additionalProperties: false,
+} as const;
+
+const tileOpJson = {
+  type: "object",
+  properties: {
+    op: { type: "string", enum: [...TILE_OPS] },
+    target: { type: "string", enum: [...TILE_TARGETS] },
+    count: { type: "integer" },
+    build_kind: { anyOf: [{ type: "string", enum: [...BUILD_KINDS] }, { type: "null" }] },
+    landmark: {
+      anyOf: [
+        {
+          type: "object",
+          properties: {
+            name: { type: "string" },
+            shape: { type: "string", enum: [...LANDMARK_SHAPES] },
+            color: { type: "string" },
+            height: { type: "number" },
+          },
+          required: ["name", "shape", "color", "height"],
+          additionalProperties: false,
+        },
+        { type: "null" },
+      ],
+    },
+  },
+  required: ["op", "target", "count", "build_kind", "landmark"],
   additionalProperties: false,
 } as const;
 
@@ -97,36 +166,7 @@ export const eventResultJsonSchema = {
       },
     },
     stat_changes: statsJson,
-    tile_ops: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          op: { type: "string", enum: [...TILE_OPS] },
-          target: { type: "string", enum: [...TILE_TARGETS] },
-          count: { type: "integer" },
-          build_kind: { anyOf: [{ type: "string", enum: [...BUILD_KINDS] }, { type: "null" }] },
-          landmark: {
-            anyOf: [
-              {
-                type: "object",
-                properties: {
-                  name: { type: "string" },
-                  shape: { type: "string", enum: [...LANDMARK_SHAPES] },
-                  color: { type: "string" },
-                  height: { type: "number" },
-                },
-                required: ["name", "shape", "color", "height"],
-                additionalProperties: false,
-              },
-              { type: "null" },
-            ],
-          },
-        },
-        required: ["op", "target", "count", "build_kind", "landmark"],
-        additionalProperties: false,
-      },
-    },
+    tile_ops: { type: "array", items: tileOpJson },
     ongoing: {
       anyOf: [
         {
@@ -142,8 +182,57 @@ export const eventResultJsonSchema = {
         { type: "null" },
       ],
     },
+    spectacle: {
+      type: "object",
+      properties: {
+        actors: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              kind: { type: "string", enum: [...ACTOR_KINDS] },
+              label: { type: "string" },
+              color: { type: "string" },
+              size: { type: "integer" },
+              count: { type: "integer" },
+              shape: { type: "string", enum: [...ACTOR_SHAPES] },
+            },
+            required: ["kind", "label", "color", "size", "count", "shape"],
+            additionalProperties: false,
+          },
+        },
+        crowd: { type: "string", enum: [...CROWD_REACTIONS] },
+        responders: { type: "array", items: { type: "string", enum: [...RESPONDERS] } },
+      },
+      required: ["actors", "crowd", "responders"],
+      additionalProperties: false,
+    },
+    followups: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          delay_days: { type: "integer" },
+          note: { type: "string" },
+          stat_changes: statsJson,
+          tile_ops: { type: "array", items: tileOpJson },
+        },
+        required: ["delay_days", "note", "stat_changes", "tile_ops"],
+        additionalProperties: false,
+      },
+    },
   },
-  required: ["scale", "headline", "subhead", "quotes", "stat_changes", "tile_ops", "ongoing"],
+  required: [
+    "scale",
+    "headline",
+    "subhead",
+    "quotes",
+    "stat_changes",
+    "tile_ops",
+    "ongoing",
+    "spectacle",
+    "followups",
+  ],
   additionalProperties: false,
 } as const;
 
@@ -159,6 +248,8 @@ export const citySummarySchema = z.object({
     chaos: z.number(),
   }),
   tiles: z.record(z.string(), z.number()),
+  nature: z.number().min(0).max(100),
+  districts: z.record(z.string(), z.number()),
   recentHeadlines: z.array(z.string().max(160)).max(5),
 });
 export type CitySummary = z.infer<typeof citySummarySchema>;

@@ -1,14 +1,33 @@
-# Type-a-Disaster
+# Type-a-Disaster: Kuala Lumpur
 
-A tiny low-poly city runs itself. You type what happens to it ("a whale lands on city hall", "the mayor legalizes jetpacks") and Claude decides the consequences: buildings burn, flood or appear, stats swing, and the town paper prints a deadpan front page about it.
+A living, low-poly Kuala Lumpur. You type what happens to it ("a whale lands on Dataran Merdeka", "Godzilla stomps through Bukit Bintang"). Claude decides the consequences and choreographs what you see: the whale really falls out of the sky, people flee and then come back to gawk, fire engines and ambulances race in along the roads, and the chain reaction keeps unfolding over the next few days. The town paper reports all of it with a straight face.
+
+## What's on screen
+
+- **A stylised KL** on a 32×32 map:
+  - The Klang and Gombak rivers meeting at Masjid Jamek.
+  - Dataran Merdeka and the Sultan Abdul Samad Building.
+  - Chinatown, KLCC with the Petronas Twin Towers and KLCC Park, Bukit Bintang, and Menara KL on the Bukit Nanas forest reserve.
+  - Merdeka 118, KL Sentral, Kampung Baru, the Lake Gardens and Titiwangsa.
+  - Suburbs such as Bangsar, Mont Kiara, Cheras and Ampang.
+- **Street life:**
+  - Cars, motorbikes and Rapid KL buses on the roads, driving on the left, slowing in rain and jamming when chaos is high.
+  - The LRT Kelana Jaya, MRT Kajang and KL Monorail lines, with trains stopping at stations.
+  - Pedestrians, bird flocks, macaques in the forests and monitor lizards along the riverbanks.
+- **Time and weather:**
+  - Day and night: street lamps and windows light up after dark.
+  - Afternoon thunderstorms with lightning, and smog haze.
+  - Trees sway in the wind.
 
 ## How it plays
 
-- **The city grows on its own.** It's a 16×16 grid of roads, houses, shops, towers and parks. One day passes every 2 seconds (4× with fast-forward). Happy, solvent cities expand; polluted, chaotic ones decline.
-- **You type events.** Each event goes to Claude, which returns structured effects: stat changes, tile operations (destroy, burn, flood, build, landmark, clear), an optional lingering effect, and a headline with quotes from residents.
-- **Event credits.** You get 5, and one refills every 10 minutes. Claude rates each event's scale: minor costs 1 credit, citywide 2, apocalyptic 3. Refused events cost nothing.
-- **Your city, shareable.** Your city is saved in the browser. The share button makes a link that replays your city's full history from its seed and event log.
-- **No game over, just an obituary.** If the population hits zero, the paper runs your city's obituary. You can start a new city or type something that revives it.
+- **The city grows on its own.** One day passes every 12 seconds, or 3 seconds on fast-forward. Happy, solvent districts build new houses, shops and towers, each in their own character: towers in KLCC, shophouses in Chinatown, kampung houses in Kampung Baru. When free land runs out, the city sprawls into unprotected forest, which lowers the **Nature** score. It also rebuilds low-rise districts as high-rise. When smog gets bad, the council turns blocks into parks. The protected reserves (Lake Gardens, Bukit Nanas) are never cleared.
+- **You type events.** Claude returns:
+  - **Map effects:** tile changes (destroy, burn, flood, build, landmark, clear), which can target a district by name.
+  - **A spectacle:** actors such as a whale, meteor, kaiju, UFO, tornado, swarm, convoy, a rain of objects, a flood wave, a storm or fireworks, plus how the crowd reacts and which emergency services respond.
+  - **Follow-ups:** up to three chain reactions that fire on later days as news bulletins.
+- **Event credits.** You get 5, and one refills every 10 minutes. Minor events cost 1 credit, citywide 2, apocalyptic 3.
+- **Your city, shareable.** The city is saved in the browser. The share button makes a link that replays the whole history. The simulation is deterministic, so a seed plus the event log rebuilds the city exactly.
 
 ## Setup: Anthropic API key
 
@@ -28,12 +47,14 @@ Without a key the game still runs, but typed events show a "newsroom is closed" 
 
 | Path | What it does |
 | --- | --- |
-| `src/lib/city/simulation.ts` | Deterministic sim: city creation, daily tick, applying events, replay |
+| `src/lib/city/kl.ts` | The KL map: districts, rivers, roads, rail lines, landmarks |
+| `src/lib/city/simulation.ts` | Deterministic sim: growth, sprawl, redevelopment, events, chain reactions, replay |
 | `src/lib/city/schema.ts` | Zod validation and clamping of event results, plus the JSON schema sent to Claude |
 | `src/lib/city/newsroom.server.ts` | Server-only Claude call (structured output, refusal fallback) |
 | `src/lib/city/simulate.functions.ts` | Server function the page calls, with a per-IP throttle |
 | `src/lib/city/persistence.ts` | localStorage save, credits, share-link encoding |
-| `src/components/city/CityScene.tsx` | three.js / react-three-fiber scene |
+| `src/components/city/CityScene.tsx` | three.js / react-three-fiber scene and camera director |
+| `src/components/city/scene/*` | Instanced buildings, ground and trees, rail, street life, sky and weather, event spectacles |
 | `src/components/city/Newspaper.tsx` | The Gazette sidebar |
 | `src/routes/index.tsx` | The game page |
 
