@@ -104,6 +104,13 @@ export const eventResultSchema = z.object({
     .default([]),
 }) satisfies z.ZodType<EventResult, z.ZodTypeDef, unknown>;
 
+// ---------------------------------------------------------------------------
+// What Claude fills in. Kept deliberately flat and enum-light: structured
+// outputs compile the schema into a grammar with a size limit, so most choices
+// are plain strings (the prompt lists the allowed values) and fromClaude()
+// maps anything unexpected to a safe default.
+// ---------------------------------------------------------------------------
+
 const statsJson = {
   type: "object",
   properties: {
@@ -117,36 +124,45 @@ const statsJson = {
   additionalProperties: false,
 } as const;
 
-const tileOpJson = {
+const opJson = {
   type: "object",
   properties: {
     op: { type: "string", enum: [...TILE_OPS] },
-    target: { type: "string", enum: [...TILE_TARGETS] },
+    target: { type: "string" },
     count: { type: "integer" },
-    build_kind: { anyOf: [{ type: "string", enum: [...BUILD_KINDS] }, { type: "null" }] },
-    landmark: {
-      anyOf: [
-        {
-          type: "object",
-          properties: {
-            name: { type: "string" },
-            shape: { type: "string", enum: [...LANDMARK_SHAPES] },
-            color: { type: "string" },
-            height: { type: "number" },
-          },
-          required: ["name", "shape", "color", "height"],
-          additionalProperties: false,
-        },
-        { type: "null" },
-      ],
-    },
+    build: { type: "string" },
+    landmark_name: { type: "string" },
+    landmark_shape: { type: "string" },
+    landmark_color: { type: "string" },
+    landmark_height: { type: "number" },
   },
-  required: ["op", "target", "count", "build_kind", "landmark"],
+  required: [
+    "op",
+    "target",
+    "count",
+    "build",
+    "landmark_name",
+    "landmark_shape",
+    "landmark_color",
+    "landmark_height",
+  ],
+  additionalProperties: false,
+} as const;
+
+const followupOpJson = {
+  type: "object",
+  properties: {
+    op: { type: "string", enum: [...TILE_OPS] },
+    target: { type: "string" },
+    count: { type: "integer" },
+    build: { type: "string" },
+  },
+  required: ["op", "target", "count", "build"],
   additionalProperties: false,
 } as const;
 
 /** JSON Schema handed to Claude's structured outputs. */
-export const eventResultJsonSchema = {
+export const claudeOutputJsonSchema = {
   type: "object",
   properties: {
     scale: { type: "string", enum: ["minor", "citywide", "apocalyptic"] },
@@ -165,48 +181,29 @@ export const eventResultJsonSchema = {
         additionalProperties: false,
       },
     },
-    stat_changes: statsJson,
-    tile_ops: { type: "array", items: tileOpJson },
-    ongoing: {
-      anyOf: [
-        {
-          type: "object",
-          properties: {
-            label: { type: "string" },
-            duration_days: { type: "integer" },
-            per_day: statsJson,
-          },
-          required: ["label", "duration_days", "per_day"],
-          additionalProperties: false,
+    stats: statsJson,
+    tile_ops: { type: "array", items: opJson },
+    ongoing_label: { type: "string" },
+    ongoing_days: { type: "integer" },
+    ongoing_per_day: statsJson,
+    actors: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          kind: { type: "string" },
+          label: { type: "string" },
+          color: { type: "string" },
+          size: { type: "integer" },
+          count: { type: "integer" },
+          shape: { type: "string" },
         },
-        { type: "null" },
-      ],
-    },
-    spectacle: {
-      type: "object",
-      properties: {
-        actors: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              kind: { type: "string", enum: [...ACTOR_KINDS] },
-              label: { type: "string" },
-              color: { type: "string" },
-              size: { type: "integer" },
-              count: { type: "integer" },
-              shape: { type: "string", enum: [...ACTOR_SHAPES] },
-            },
-            required: ["kind", "label", "color", "size", "count", "shape"],
-            additionalProperties: false,
-          },
-        },
-        crowd: { type: "string", enum: [...CROWD_REACTIONS] },
-        responders: { type: "array", items: { type: "string", enum: [...RESPONDERS] } },
+        required: ["kind", "label", "color", "size", "count", "shape"],
+        additionalProperties: false,
       },
-      required: ["actors", "crowd", "responders"],
-      additionalProperties: false,
     },
+    crowd: { type: "string" },
+    responders: { type: "array", items: { type: "string" } },
     followups: {
       type: "array",
       items: {
@@ -214,10 +211,10 @@ export const eventResultJsonSchema = {
         properties: {
           delay_days: { type: "integer" },
           note: { type: "string" },
-          stat_changes: statsJson,
-          tile_ops: { type: "array", items: tileOpJson },
+          stats: statsJson,
+          tile_ops: { type: "array", items: followupOpJson },
         },
-        required: ["delay_days", "note", "stat_changes", "tile_ops"],
+        required: ["delay_days", "note", "stats", "tile_ops"],
         additionalProperties: false,
       },
     },
@@ -227,14 +224,119 @@ export const eventResultJsonSchema = {
     "headline",
     "subhead",
     "quotes",
-    "stat_changes",
+    "stats",
     "tile_ops",
-    "ongoing",
-    "spectacle",
+    "ongoing_label",
+    "ongoing_days",
+    "ongoing_per_day",
+    "actors",
+    "crowd",
+    "responders",
     "followups",
   ],
   additionalProperties: false,
 } as const;
+
+/** A plain-text description of the same shape, for requests without structured outputs. */
+export const CLAUDE_OUTPUT_EXAMPLE = `{"scale":"minor|citywide|apocalyptic","headline":"","subhead":"","quotes":[{"name":"","role":"","text":""}],"stats":{"population":0,"happiness":0,"money":0,"pollution":0,"chaos":0},"tile_ops":[{"op":"destroy|burn|flood|build|landmark|clear","target":"","count":1,"build":"","landmark_name":"","landmark_shape":"","landmark_color":"#rrggbb","landmark_height":1}],"ongoing_label":"","ongoing_days":0,"ongoing_per_day":{"population":0,"happiness":0,"money":0,"pollution":0,"chaos":0},"actors":[{"kind":"","label":"","color":"#rrggbb","size":1,"count":1,"shape":""}],"crowd":"flee|gather|celebrate|ignore","responders":[""],"followups":[{"delay_days":1,"note":"","stats":{"population":0,"happiness":0,"money":0,"pollution":0,"chaos":0},"tile_ops":[{"op":"build","target":"","count":1,"build":""}]}]}`;
+
+const norm = (v: unknown) =>
+  String(v ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+const oneOf = <T extends string>(list: readonly T[], v: unknown): T | null => {
+  const n = norm(v);
+  return (list as readonly string[]).includes(n) ? (n as T) : null;
+};
+const obj = (v: unknown): Record<string, unknown> =>
+  v && typeof v === "object" ? (v as Record<string, unknown>) : {};
+const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+const statsFrom = (v: unknown) => {
+  const o = obj(v);
+  const n = (k: string) => (Number.isFinite(Number(o[k])) ? Number(o[k]) : 0);
+  return {
+    population: n("population"),
+    happiness: n("happiness"),
+    money: n("money"),
+    pollution: n("pollution"),
+    chaos: n("chaos"),
+  };
+};
+
+function opFromClaude(raw: unknown) {
+  const o = obj(raw);
+  const op = oneOf(TILE_OPS, o.op);
+  if (!op) return null;
+  const hasLandmark = op === "landmark";
+  return {
+    op,
+    target: oneOf(TILE_TARGETS, o.target) ?? "random",
+    count: Number(o.count) || 1,
+    build_kind: oneOf(BUILD_KINDS, o.build),
+    landmark: hasLandmark
+      ? {
+          name: o.landmark_name || "Monument",
+          shape: oneOf(LANDMARK_SHAPES, o.landmark_shape) ?? "statue",
+          color: o.landmark_color,
+          height: typeof o.landmark_height === "number" ? o.landmark_height : 1.5,
+        }
+      : null,
+  };
+}
+
+/** Converts Claude's flat output into a validated, clamped EventResult. */
+export function fromClaude(raw: unknown) {
+  const o = obj(raw);
+  const ongoingDays = Number(o.ongoing_days) || 0;
+  return eventResultSchema.safeParse({
+    scale: o.scale,
+    headline: o.headline ?? "",
+    subhead: o.subhead ?? "",
+    quotes: arr(o.quotes),
+    stat_changes: statsFrom(o.stats),
+    tile_ops: arr(o.tile_ops).map(opFromClaude).filter(Boolean),
+    ongoing:
+      ongoingDays > 0 && o.ongoing_label
+        ? {
+            label: o.ongoing_label,
+            duration_days: ongoingDays,
+            per_day: statsFrom(o.ongoing_per_day),
+          }
+        : null,
+    spectacle: {
+      actors: arr(o.actors)
+        .map((a) => {
+          const x = obj(a);
+          const kind = oneOf(ACTOR_KINDS, x.kind);
+          return kind
+            ? {
+                kind,
+                label: x.label ?? "",
+                color: x.color,
+                size: Number(x.size) || 3,
+                count: Number(x.count) || 1,
+                shape: oneOf(ACTOR_SHAPES, x.shape) ?? "blob",
+              }
+            : null;
+        })
+        .filter(Boolean),
+      crowd: oneOf(CROWD_REACTIONS, o.crowd) ?? "ignore",
+      responders: arr(o.responders)
+        .map((r) => oneOf(RESPONDERS, r))
+        .filter(Boolean),
+    },
+    followups: arr(o.followups).map((f) => {
+      const x = obj(f);
+      return {
+        delay_days: Number(x.delay_days) || 1,
+        note: x.note ?? "",
+        stat_changes: statsFrom(x.stats),
+        tile_ops: arr(x.tile_ops).map(opFromClaude).filter(Boolean),
+      };
+    }),
+  });
+}
 
 /** Compact city snapshot sent to the server with each event. */
 export const citySummarySchema = z.object({
