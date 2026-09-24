@@ -4,12 +4,14 @@ A living, low-poly Kuala Lumpur. You type what happens to it ("a whale lands on 
 
 ## What's on screen
 
-- **A stylised KL** on a 32×32 map:
-  - The Klang and Gombak rivers meeting at Masjid Jamek.
-  - Dataran Merdeka and the Sultan Abdul Samad Building.
-  - Chinatown, KLCC with the Petronas Twin Towers and KLCC Park, Bukit Bintang, and Menara KL on the Bukit Nanas forest reserve.
-  - Merdeka 118, KL Sentral, Kampung Baru, the Lake Gardens and Titiwangsa.
-  - Suburbs such as Bangsar, Mont Kiara, Cheras and Ampang.
+- **Kuala Lumpur's city centre** on a 32×32 map. Each tile is about 100 m, and tiles follow real longitude and latitude, so streets and buildings sit roughly where they are.
+  - **Bukit Bintang:** Pavilion, Lot 10, Starhill and Sungei Wang around the Jalan Bukit Bintang / Jalan Sultan Ismail crossing, plus the Jalan Alor food street and Changkat.
+  - **KLCC:** the Petronas Twin Towers, Suria KLCC, KLCC Park and the Convention Centre.
+  - **Towers:** Menara KL on the Bukit Nanas forest reserve, The Exchange 106 at TRX, Berjaya Times Square, and Merdeka 118 with Stadium Merdeka.
+  - **Old town:** Chinatown's Petaling Street and Central Market, Masjid Jamek where the Klang and Gombak rivers meet, and Dataran Merdeka with the Sultan Abdul Samad Building.
+  - **Neighbourhoods:** Kampung Baru's wooden stilt houses and rows of pastel shophouses.
+  - **Rail:** the Monorail, LRT Kelana Jaya, LRT Ampang and MRT Kajang lines with their real stations.
+  - **Labels:** name tags on landmarks, which you can toggle.
 - **Street life:**
   - Cars, motorbikes and Rapid KL buses on the roads, driving on the left, slowing in rain and jamming when chaos is high.
   - The LRT Kelana Jaya, MRT Kajang and KL Monorail lines, with trains stopping at stations.
@@ -47,7 +49,7 @@ Without a key the game still runs, but typed events show a "newsroom is closed" 
 
 | Path | What it does |
 | --- | --- |
-| `src/lib/city/kl.ts` | The KL map: districts, rivers, roads, rail lines, landmarks |
+| `src/lib/city/kl.ts` | The city-centre map: districts, rivers, streets, rail lines, landmarks |
 | `src/lib/city/simulation.ts` | Deterministic sim: growth, sprawl, redevelopment, events, chain reactions, replay |
 | `src/lib/city/schema.ts` | Zod validation and clamping of event results, plus the JSON schema sent to Claude |
 | `src/lib/city/newsroom.server.ts` | Server-only Claude call (structured output, refusal fallback) |

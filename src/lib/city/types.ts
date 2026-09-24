@@ -26,6 +26,16 @@ export const LANDMARK_SHAPES = [
   "supertall",
   "mosque",
   "colonial",
+  "crown_tower",
+  "mall",
+  "green_facade",
+  "twin_block",
+  "art_deco",
+  "hawker",
+  "shophouses",
+  "stadium",
+  "convention",
+  "flagpole",
 ] as const;
 export type LandmarkShape = (typeof LANDMARK_SHAPES)[number];
 
@@ -73,22 +83,24 @@ export interface OngoingEffect {
 export type EventScale = "minor" | "citywide" | "apocalyptic";
 
 export const DISTRICT_IDS = [
-  "klcc",
   "bukit_bintang",
+  "jalan_alor",
+  "changkat",
+  "klcc",
+  "raja_chulan",
+  "trx",
+  "imbi",
+  "pudu",
   "chinatown",
   "merdeka",
-  "chow_kit",
-  "kampung_baru",
-  "titiwangsa",
+  "masjid_jamek",
   "bukit_nanas",
-  "lake_gardens",
-  "sentral",
-  "brickfields",
-  "bangsar",
-  "mont_kiara",
-  "pudu",
-  "cheras",
+  "kampung_baru",
+  "chow_kit",
   "ampang",
+  "lake_gardens",
+  "brickfields",
+  "cheras",
   "outskirts",
 ] as const;
 export type DistrictId = (typeof DISTRICT_IDS)[number];
