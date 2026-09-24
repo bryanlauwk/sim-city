@@ -36,6 +36,13 @@ export const LANDMARK_SHAPES = [
   "stadium",
   "convention",
   "flagpole",
+  "pavilion",
+  "gold_box",
+  "sign_block",
+  "slim_pyramid",
+  "exoskeleton",
+  "curve_tower",
+  "plaza",
 ] as const;
 export type LandmarkShape = (typeof LANDMARK_SHAPES)[number];
 
@@ -44,8 +51,10 @@ export interface Landmark {
   shape: LandmarkShape;
   /** Hex colour, e.g. "#ff8800". */
   color: string;
-  /** Relative height, 0.3 – 4 tiles. */
+  /** Relative height in tiles. */
   height: number;
+  /** Visual footprint in tiles for buildings bigger than one lot (default 1). */
+  span?: number;
 }
 
 export interface Tile {
@@ -91,16 +100,9 @@ export const DISTRICT_IDS = [
   "trx",
   "imbi",
   "pudu",
-  "chinatown",
-  "merdeka",
-  "masjid_jamek",
   "bukit_nanas",
-  "kampung_baru",
-  "chow_kit",
+  "dang_wangi",
   "ampang",
-  "lake_gardens",
-  "brickfields",
-  "cheras",
   "outskirts",
 ] as const;
 export type DistrictId = (typeof DISTRICT_IDS)[number];
@@ -158,6 +160,21 @@ export const ACTOR_KINDS = [
   "wave",
   "storm",
   "fireworks",
+  "tapir",
+  "hornbill",
+  "monitor_lizard",
+  "durian",
+  "grab_swarm",
+  "hot_air_balloon",
+  "lion_dance",
+  "procession",
+  "parade",
+  "festive_lights",
+  "haze",
+  "sinkhole",
+  "landslide",
+  "blackout",
+  "lrt_breakdown",
 ] as const;
 export type ActorKind = (typeof ACTOR_KINDS)[number];
 
@@ -179,6 +196,12 @@ export interface Actor {
   /** For swarms, convoys and rain: how many. */
   count: number;
   shape: ActorShape;
+  /** Library key for a generated 3D model of this actor ("" for built-ins). */
+  model_key?: string;
+  /** Description sent to the 3D generator when the model doesn't exist yet. */
+  model_prompt?: string;
+  /** Public URL of the generated model once it's ready. */
+  model_url?: string;
 }
 
 export interface Spectacle {

@@ -90,6 +90,8 @@ export function Sky({ seed, day, chaos, pollution, getPhase, bus, shadows }: Pro
     target.lerp(DUSK, dusk * 0.6);
     if (raining) target.lerp(RAIN, 0.6 * Math.max(0.3, daylight));
     target.lerp(SMOG, Math.min(0.45, pollution / 180));
+    const hazy = now < bus.hazeUntil;
+    if (hazy) target.lerp(SMOG, 0.55);
     target.lerp(CHAOS, Math.min(0.5, chaos / 140));
     if (lightning.current > 0) target.lerp(new THREE.Color("#ffffff"), lightning.current * 0.6);
     sky.lerp(target, Math.min(1, dt * 3));
@@ -97,7 +99,7 @@ export function Sky({ seed, day, chaos, pollution, getPhase, bus, shadows }: Pro
     if (scene.fog) {
       scene.fog.color.copy(sky);
       const fog = scene.fog as THREE.Fog;
-      fog.far = 95 - pollution * 0.45 - (raining ? 25 : 0);
+      fog.far = (95 - pollution * 0.45 - (raining ? 25 : 0)) * (hazy ? 0.4 : 1);
       fog.near = fog.far * 0.45;
     }
 
@@ -115,8 +117,10 @@ export function Sky({ seed, day, chaos, pollution, getPhase, bus, shadows }: Pro
     }
 
     const glow = env.night ? 1 : Math.max(0, 1 - daylight * 5);
-    buildingGlow.value = glow * 0.5;
-    lampGlow.value = glow;
+    // A blackout kills the city's lights.
+    const powerOut = now < bus.blackoutUntil;
+    buildingGlow.value = powerOut ? 0 : glow * 0.5;
+    lampGlow.value = powerOut ? 0 : glow;
     treeWind.value = raining ? 3 : 1;
 
     // Rain.

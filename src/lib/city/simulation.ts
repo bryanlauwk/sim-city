@@ -333,7 +333,7 @@ export function tick(prev: CityState): CityState {
   st.money += taxes - upkeep;
 
   const targetPollution =
-    c.tower * 0.28 + c.shop * 0.08 + c.road * 0.04 + fires * 3 - c.park * 0.4 - c.forest * 0.15;
+    c.tower * 0.22 + c.shop * 0.08 + c.road * 0.04 + fires * 3 - c.park * 0.4 - c.forest * 0.15;
   st.pollution += (targetPollution - st.pollution) * 0.1;
 
   const nature = natureScore(s.grid, st.pollution);

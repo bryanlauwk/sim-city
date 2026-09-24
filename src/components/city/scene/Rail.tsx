@@ -2,14 +2,16 @@ import { useLayoutEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { RAIL_LINES, type RailLine } from "@/lib/city/kl";
-import { CENTER } from "./common";
+import { CENTER, type WorldBus } from "./common";
 
 const DECK = 1.15;
 const CAR_LEN = 0.42;
 const CARS = 3;
 
-function toWorld([x, y]: [number, number]) {
-  return new THREE.Vector3(x - CENTER, DECK, y - CENTER);
+const WALK_DECK = 0.55;
+
+function toWorld([x, y]: [number, number], deck = DECK) {
+  return new THREE.Vector3(x - CENTER, deck, y - CENTER);
 }
 
 interface Track {
@@ -18,8 +20,8 @@ interface Track {
   length: number;
 }
 
-function buildTrack(line: RailLine): Track {
-  const pts = line.points.map(toWorld);
+function buildTrack(line: RailLine, deck = DECK): Track {
+  const pts = line.points.map((p) => toWorld(p, deck));
   const cum = [0];
   for (let k = 1; k < pts.length; k++) cum.push(cum[k - 1] + pts[k].distanceTo(pts[k - 1]));
   return { pts, cum, length: cum[cum.length - 1] };
@@ -43,7 +45,7 @@ const tmpD = new THREE.Vector3();
 const FWD = new THREE.Vector3(0, 0, 1);
 const ONE = new THREE.Vector3(1, 1, 1);
 
-function Line({ line }: { line: RailLine }) {
+function Line({ line, bus }: { line: RailLine; bus: WorldBus }) {
   const track = useMemo(() => buildTrack(line), [line]);
   const trains = useRef<THREE.InstancedMesh>(null);
 
@@ -79,7 +81,9 @@ function Line({ line }: { line: RailLine }) {
     if (!mesh) return;
     let n = 0;
     for (const tr of trainState) {
-      if (tr.wait > 0) tr.wait -= dt;
+      if (bus.now < bus.railStopUntil) {
+        // Service suspended: trains sit where they are.
+      } else if (tr.wait > 0) tr.wait -= dt;
       else {
         const before = tr.d;
         tr.d += tr.dir * dt * 1.6;
@@ -180,12 +184,106 @@ function Line({ line }: { line: RailLine }) {
   );
 }
 
-export function Rail() {
+/** The covered, air-conditioned pedestrian bridge from Pavilion to KLCC, busy with walkers. */
+function Walkway({ line }: { line: RailLine }) {
+  const track = useMemo(() => buildTrack(line, WALK_DECK), [line]);
+  const people = useRef<THREE.InstancedMesh>(null);
+  const walkers = useMemo(
+    () =>
+      Array.from({ length: 16 }, (_, k) => ({
+        d: (k / 16) * track.length,
+        dir: k % 2 ? 1 : -1,
+        speed: 0.3 + (k % 5) * 0.05,
+        color: new THREE.Color().setHSL((k * 0.137) % 1, 0.5, 0.45),
+      })),
+    [track],
+  );
+  const segs = useMemo(() => {
+    const out: { pos: THREE.Vector3; len: number; yaw: number }[] = [];
+    for (let k = 1; k < track.pts.length; k++) {
+      const a = track.pts[k - 1];
+      const b = track.pts[k];
+      out.push({
+        pos: a.clone().add(b).multiplyScalar(0.5),
+        len: a.distanceTo(b),
+        yaw: Math.atan2(b.x - a.x, b.z - a.z),
+      });
+    }
+    return out;
+  }, [track]);
+
+  useFrame((_, dt) => {
+    const m = people.current;
+    if (!m) return;
+    walkers.forEach((w, k) => {
+      w.d += w.dir * w.speed * Math.min(dt, 0.05);
+      if (w.d > track.length || w.d < 0) {
+        w.dir *= -1;
+        w.d = Math.min(Math.max(w.d, 0), track.length);
+      }
+      pointAt(track, w.d, tmpP, tmpD);
+      tmpP.y += 0.08;
+      tmpP.x += (w.dir > 0 ? 0.05 : -0.05) * tmpD.z;
+      tmpP.z -= (w.dir > 0 ? 0.05 : -0.05) * tmpD.x;
+      tmpM.compose(tmpP, tmpQ.identity(), ONE);
+      m.setMatrixAt(k, tmpM);
+      m.setColorAt(k, w.color);
+    });
+    m.instanceMatrix.needsUpdate = true;
+    if (m.instanceColor) m.instanceColor.needsUpdate = true;
+  });
+
   return (
     <group>
-      {RAIL_LINES.map((l) => (
-        <Line key={l.name} line={l} />
+      {segs.map((sg, k) => (
+        <group key={k} position={sg.pos} rotation={[0, sg.yaw, 0]}>
+          <mesh castShadow receiveShadow>
+            <boxGeometry args={[0.26, 0.04, sg.len]} />
+            <meshStandardMaterial color="#cfc9bc" flatShading />
+          </mesh>
+          <mesh castShadow position={[0, 0.2, 0]}>
+            <boxGeometry args={[0.32, 0.03, sg.len]} />
+            <meshStandardMaterial color={line.color} flatShading />
+          </mesh>
+          {[-0.14, 0.14].map((x) => (
+            <mesh key={x} position={[x, 0.1, 0]}>
+              <boxGeometry args={[0.015, 0.17, sg.len]} />
+              <meshStandardMaterial color="#a9d3e6" transparent opacity={0.45} />
+            </mesh>
+          ))}
+          {Array.from({ length: Math.max(1, Math.floor(sg.len / 1.5)) }, (_, p) => (
+            <mesh
+              key={`p${p}`}
+              position={[
+                0,
+                -WALK_DECK / 2,
+                -sg.len / 2 + (p + 0.5) * (sg.len / Math.max(1, Math.floor(sg.len / 1.5))),
+              ]}
+            >
+              <cylinderGeometry args={[0.03, 0.035, WALK_DECK, 6]} />
+              <meshStandardMaterial color="#a19d94" />
+            </mesh>
+          ))}
+        </group>
       ))}
+      <instancedMesh
+        ref={people}
+        args={[undefined, undefined, walkers.length]}
+        frustumCulled={false}
+      >
+        <capsuleGeometry args={[0.03, 0.07, 2, 5]} />
+        <meshStandardMaterial flatShading />
+      </instancedMesh>
+    </group>
+  );
+}
+
+export function Rail({ bus }: { bus: WorldBus }) {
+  return (
+    <group>
+      {RAIL_LINES.map((l) =>
+        l.walkway ? <Walkway key={l.name} line={l} /> : <Line key={l.name} line={l} bus={bus} />,
+      )}
     </group>
   );
 }
