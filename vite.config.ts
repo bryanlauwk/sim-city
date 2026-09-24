@@ -12,4 +12,23 @@ export default defineConfig({
   tanstackStart: {
     server: { entry: "server" },
   },
+  vite: {
+    environments: {
+      ssr: {
+        build: {
+          rollupOptions: {
+            output: {
+              // The Anthropic SDK re-exports Node built-ins as namespaces
+              // (internal/node.mjs). When Rollup merges that module into a
+              // shared chunk the namespace bindings get dropped and the Worker
+              // crashes with "stream is not defined". Keep the SDK in its own chunk.
+              manualChunks(id) {
+                if (id.includes("node_modules/@anthropic-ai/sdk")) return "anthropic-sdk";
+              },
+            },
+          },
+        },
+      },
+    },
+  },
 });
