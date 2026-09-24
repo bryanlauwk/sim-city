@@ -147,7 +147,9 @@ interface MeshyTask {
 }
 
 async function checkMeshy(c: Config, id: string): Promise<MeshyTask> {
-  const res = await fetch(`${meshyEndpoint()}/${id}`, { headers: { Authorization: `Bearer ${c.meshy}` } });
+  const res = await fetch(`${meshyEndpoint()}/${id}`, {
+    headers: { Authorization: `Bearer ${c.meshy}` },
+  });
   if (!res.ok) throw new Error(`Meshy status failed: ${res.status}`);
   return (await res.json()) as MeshyTask;
 }
