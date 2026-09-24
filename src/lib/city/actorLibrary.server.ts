@@ -1,71 +1,60 @@
 /**
- * The shared library of generated actors.
+ * The shared library of custom actors — no paid 3D service needed.
  *
- * When Claude casts something the built-in library doesn't have (say, a
- * giant glass of teh tarik), it names a model_key and a model_prompt. We
- * look the key up in Supabase; if nobody has generated it yet — and today's
- * caps allow — we ask Meshy for a low-poly model, and the event plays with a
- * built-in stand-in. Clients poll until the model is ready; the finished GLB
- * is re-hosted in Supabase Storage so everyone after gets it instantly.
+ * When Claude casts something the built-in library can't show, it names a
+ * model_key and provides two ways to show it:
+ *   1. search_terms, for real-world things that likely exist as free low-poly
+ *      models on Poly Pizza (a durian, a double-decker bus, a cat);
+ *   2. a recipe — its own design from simple primitives — for everything
+ *      else (a giant teh tarik, a Proton Saga, a roti canai).
+ * The server resolves in that order, stores the winner in a shared Supabase
+ * library, and everyone after gets it instantly.
  *
- * Needs MESHY_API_KEY, SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY. Without
- * them, custom actors quietly fall back to their stand-ins.
+ * Optional secrets: POLYPIZZA_API_KEY (free), SUPABASE_URL and
+ * SUPABASE_SERVICE_ROLE_KEY. With none of them, recipes still work per event.
  */
-import type { Actor } from "./types";
+import { recipe as recipeSchema } from "./schema";
+import type { Actor, Recipe } from "./types";
 
-// MESHY_API_BASE exists for local testing against a stand-in server.
-const meshyEndpoint = () =>
-  `${(process.env.MESHY_API_BASE || "https://api.meshy.ai").replace(/\/+$/, "")}/openapi/v2/text-to-3d`;
 const TABLE = "actor_library";
 const BUCKET = "actors";
+// POLYPIZZA_API_BASE exists for local testing against a stand-in server.
+const polyBase = () =>
+  (process.env.POLYPIZZA_API_BASE || "https://api.poly.pizza/v1.1").replace(/\/+$/, "");
 
-type Status = "pending" | "ready" | "failed";
+type Source = "recipe" | "polypizza";
 
 interface Row {
   key: string;
   name: string;
-  prompt: string;
-  color: string;
-  status: Status;
-  meshy_task_id: string | null;
+  source: Source;
+  recipe: Recipe | null;
   model_url: string | null;
+  attribution: string | null;
+  license: string | null;
   requested_by: string | null;
   uses: number;
   created_at: string;
 }
 
-export interface CustomActorState {
-  key: string;
-  status: Status | "unavailable";
-  url?: string;
-}
-
-function config() {
-  const meshy = process.env.MESHY_API_KEY;
+function supabase() {
   const url = process.env.SUPABASE_URL?.replace(/\/+$/, "");
   const service = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!meshy || !url || !service) return null;
-  return {
-    meshy,
-    url,
-    service,
-    dailyCap: Number(process.env.MESHY_DAILY_CAP) || 20,
-    visitorCap: Number(process.env.MESHY_PER_VISITOR_CAP) || 2,
-  };
+  return url && service ? { url, service } : null;
 }
-type Config = NonNullable<ReturnType<typeof config>>;
+type Sb = NonNullable<ReturnType<typeof supabase>>;
 
-export const customActorsEnabled = () => config() !== null;
+const perVisitorCap = () => Number(process.env.LIBRARY_PER_VISITOR_CAP) || 10;
 
 // ---------------------------------------------------------------------------
 // Supabase (PostgREST + Storage over plain fetch)
 // ---------------------------------------------------------------------------
 
-function sbHeaders(c: Config, extra: Record<string, string> = {}) {
+function sbHeaders(c: Sb, extra: Record<string, string> = {}) {
   return { apikey: c.service, Authorization: `Bearer ${c.service}`, ...extra };
 }
 
-async function getRow(c: Config, key: string): Promise<Row | null> {
+async function getRow(c: Sb, key: string): Promise<Row | null> {
   const res = await fetch(`${c.url}/rest/v1/${TABLE}?key=eq.${encodeURIComponent(key)}&select=*`, {
     headers: sbHeaders(c),
   });
@@ -74,36 +63,38 @@ async function getRow(c: Config, key: string): Promise<Row | null> {
   return rows[0] ?? null;
 }
 
-async function patchRow(c: Config, key: string, patch: Partial<Row>) {
-  const res = await fetch(`${c.url}/rest/v1/${TABLE}?key=eq.${encodeURIComponent(key)}`, {
+async function bumpUses(c: Sb, row: Row) {
+  await fetch(`${c.url}/rest/v1/${TABLE}?key=eq.${encodeURIComponent(row.key)}`, {
     method: "PATCH",
     headers: sbHeaders(c, { "Content-Type": "application/json", Prefer: "return=minimal" }),
-    body: JSON.stringify({ ...patch, updated_at: new Date().toISOString() }),
+    body: JSON.stringify({ uses: row.uses + 1 }),
   });
-  if (!res.ok) throw new Error(`Supabase update failed: ${res.status}`);
 }
 
-async function insertRow(c: Config, row: Partial<Row>) {
+let indexCache: { at: number; entries: { key: string; name: string }[] } | null = null;
+
+async function insertRow(c: Sb, row: Partial<Row>) {
   const res = await fetch(`${c.url}/rest/v1/${TABLE}`, {
     method: "POST",
     headers: sbHeaders(c, { "Content-Type": "application/json", Prefer: "return=minimal" }),
     body: JSON.stringify(row),
   });
-  // 409: someone else just claimed this key — fine, they're generating it.
+  // 409: someone saved this key a moment ago — theirs wins, which is fine.
   if (!res.ok && res.status !== 409) throw new Error(`Supabase insert failed: ${res.status}`);
+  indexCache = null;
 }
 
-async function countSince(c: Config, since: string, requestedBy?: string): Promise<number> {
-  const filter = requestedBy ? `&requested_by=eq.${encodeURIComponent(requestedBy)}` : "";
+async function countToday(c: Sb, requestedBy: string): Promise<number> {
+  const since = new Date();
+  since.setUTCHours(0, 0, 0, 0);
   const res = await fetch(
-    `${c.url}/rest/v1/${TABLE}?select=key&created_at=gte.${encodeURIComponent(since)}${filter}`,
+    `${c.url}/rest/v1/${TABLE}?select=key&created_at=gte.${encodeURIComponent(since.toISOString())}&requested_by=eq.${encodeURIComponent(requestedBy)}`,
     { method: "HEAD", headers: sbHeaders(c, { Prefer: "count=exact", Range: "0-0" }) },
   );
-  const range = res.headers.get("content-range") ?? "";
-  return Number(range.split("/")[1]) || 0;
+  return Number((res.headers.get("content-range") ?? "").split("/")[1]) || 0;
 }
 
-async function uploadModel(c: Config, key: string, glb: ArrayBuffer): Promise<string> {
+async function uploadModel(c: Sb, key: string, glb: ArrayBuffer): Promise<string> {
   const path = `${key}.glb`;
   const res = await fetch(`${c.url}/storage/v1/object/${BUCKET}/${path}`, {
     method: "POST",
@@ -114,44 +105,87 @@ async function uploadModel(c: Config, key: string, glb: ArrayBuffer): Promise<st
   return `${c.url}/storage/v1/object/public/${BUCKET}/${path}`;
 }
 
-// ---------------------------------------------------------------------------
-// Meshy
-// ---------------------------------------------------------------------------
-
-async function startMeshy(c: Config, prompt: string): Promise<string> {
-  const res = await fetch(meshyEndpoint(), {
-    method: "POST",
-    headers: { Authorization: `Bearer ${c.meshy}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      mode: "preview",
-      // Untextured preview meshes suit the city's flat-shaded look; we colour them ourselves.
-      prompt:
-        `${prompt}. Single object, stylised, simple low-poly shapes, no base, no background.`.slice(
-          0,
-          800,
-        ),
-      topology: "triangle",
-      should_remesh: true,
-      target_polycount: 6000,
-    }),
-  });
-  if (!res.ok) throw new Error(`Meshy create failed: ${res.status} ${await res.text()}`);
-  const { result } = (await res.json()) as { result: string };
-  return result;
+/** Existing keys, so Claude can reuse them instead of inventing duplicates. */
+export async function libraryIndex(): Promise<{ key: string; name: string }[]> {
+  const c = supabase();
+  if (!c) return [];
+  if (indexCache && Date.now() - indexCache.at < 60_000) return indexCache.entries;
+  try {
+    const res = await fetch(`${c.url}/rest/v1/${TABLE}?select=key,name&order=uses.desc&limit=80`, {
+      headers: sbHeaders(c),
+    });
+    const entries = res.ok ? ((await res.json()) as { key: string; name: string }[]) : [];
+    indexCache = { at: Date.now(), entries };
+    return entries;
+  } catch {
+    return [];
+  }
 }
 
-interface MeshyTask {
-  status: "PENDING" | "IN_PROGRESS" | "SUCCEEDED" | "FAILED" | "CANCELED";
-  progress?: number;
-  model_urls?: { glb?: string };
+// ---------------------------------------------------------------------------
+// Poly Pizza: free CC0 / CC-BY low-poly models
+// ---------------------------------------------------------------------------
+
+interface PolyModel {
+  title: string;
+  download: string;
+  license: string;
+  attribution: string;
+  triCount: number;
+  creator: string;
 }
 
-async function checkMeshy(c: Config, id: string): Promise<MeshyTask> {
-  const res = await fetch(`${meshyEndpoint()}/${id}`, {
-    headers: { Authorization: `Bearer ${c.meshy}` },
+/** Poly Pizza fields have appeared in both camelCase and PascalCase; accept either. */
+function readPoly(raw: Record<string, unknown>): PolyModel | null {
+  const get = (...names: string[]) => {
+    for (const n of names) if (raw[n] !== undefined && raw[n] !== null) return raw[n];
+    return undefined;
+  };
+  const download = String(get("download", "Download") ?? "");
+  // Plain http is only allowed against a local stand-in server.
+  const scheme = process.env.POLYPIZZA_API_BASE ? /^https?:\/\// : /^https:\/\//;
+  if (!scheme.test(download)) return null;
+  const creator = get("creator", "Creator") as Record<string, unknown> | string | undefined;
+  return {
+    title: String(get("title", "Title") ?? ""),
+    download,
+    license: String(get("license", "Licence", "License") ?? ""),
+    attribution: String(get("attribution", "Attribution") ?? ""),
+    triCount: Number(get("triCount", "Tri Count", "TriCount")) || 0,
+    creator:
+      typeof creator === "string"
+        ? creator
+        : String(creator?.name ?? creator?.Username ?? creator?.username ?? ""),
+  };
+}
+
+/** Only licences that allow use in a public game: CC0, or CC-BY with credit. */
+const USABLE_LICENCE = /^(cc0|cc-?by|cc-by 3\.0|cc-by 4\.0|public domain|creative commons zero)$/i;
+
+async function searchPolyPizza(terms: string): Promise<PolyModel | null> {
+  const key = process.env.POLYPIZZA_API_KEY;
+  if (!key || !terms.trim()) return null;
+  const res = await fetch(`${polyBase()}/search/${encodeURIComponent(terms.trim())}?limit=12`, {
+    headers: { "x-auth-token": key },
   });
-  if (!res.ok) throw new Error(`Meshy status failed: ${res.status}`);
-  return (await res.json()) as MeshyTask;
+  if (!res.ok) {
+    console.warn("Poly Pizza search failed", res.status);
+    return null;
+  }
+  const body = (await res.json()) as { results?: unknown[] };
+  const models = (body.results ?? [])
+    .map((r) => readPoly(r as Record<string, unknown>))
+    .filter((m): m is PolyModel => !!m)
+    .filter((m) => USABLE_LICENCE.test(m.license.trim()))
+    .filter((m) => !m.triCount || m.triCount <= 30_000);
+  return models[0] ?? null;
+}
+
+function creditLine(m: PolyModel): string | undefined {
+  if (/cc0|zero|public domain/i.test(m.license)) return undefined;
+  return (
+    m.attribution || `${m.title || "3D model"} by ${m.creator || "unknown"} (CC-BY) via Poly Pizza`
+  ).slice(0, 200);
 }
 
 // ---------------------------------------------------------------------------
@@ -165,91 +199,88 @@ async function hashVisitor(ip: string): Promise<string> {
     .join("");
 }
 
-const startOfDay = () => {
-  const d = new Date();
-  d.setUTCHours(0, 0, 0, 0);
-  return d.toISOString();
-};
+function fromRow(actor: Actor, row: Row): Actor | null {
+  if (row.source === "polypizza" && row.model_url)
+    return {
+      ...actor,
+      model_url: row.model_url,
+      attribution: row.attribution ?? undefined,
+      recipe: undefined,
+    };
+  const parsed = recipeSchema.safeParse(row.recipe);
+  return parsed.success && parsed.data.parts.length
+    ? { ...actor, recipe: parsed.data, model_url: undefined }
+    : null;
+}
 
 /**
- * Resolves the custom models in a freshly generated event: attaches URLs of
- * ready models, starts generation for new ones within the caps, and strips
- * the key when a model can't be had (so the stand-in simply plays).
+ * Gives every custom actor something to show: a saved library entry, a
+ * Poly Pizza model, or Claude's recipe — and saves new ones for everyone.
  */
 export async function resolveCustomActors(actors: Actor[], ip: string): Promise<Actor[]> {
-  const c = config();
+  const sb = supabase();
   const out: Actor[] = [];
   for (const actor of actors) {
-    if (!actor.model_key) {
+    const key = actor.model_key;
+    if (!key) {
       out.push(actor);
       continue;
     }
-    const plain: Actor = { ...actor, model_key: undefined, model_prompt: undefined };
-    if (!c) {
-      out.push(plain);
-      continue;
-    }
+    const plain: Actor = { ...actor, search_terms: undefined };
     try {
-      const key = actor.model_key;
-      const row = await getRow(c, key);
-      if (row?.status === "ready" && row.model_url) {
-        await patchRow(c, key, { uses: row.uses + 1 });
-        out.push({ ...actor, model_url: row.model_url });
-      } else if (row?.status === "pending") {
-        out.push(actor);
-      } else if (row?.status === "failed" || !actor.model_prompt) {
-        out.push(plain);
-      } else {
-        const visitor = await hashVisitor(ip);
-        const since = startOfDay();
-        const [today, mine] = await Promise.all([
-          countSince(c, since),
-          countSince(c, since, visitor),
-        ]);
-        if (today >= c.dailyCap || mine >= c.visitorCap) {
-          out.push(plain);
-          continue;
-        }
-        const taskId = await startMeshy(c, actor.model_prompt);
-        await insertRow(c, {
-          key,
-          name: actor.label || key,
-          prompt: actor.model_prompt,
-          color: actor.color,
-          status: "pending",
-          meshy_task_id: taskId,
-          requested_by: visitor,
-        });
-        out.push(actor);
+      // 1. Already in the shared library?
+      const row = sb ? await getRow(sb, key) : null;
+      const saved = row && fromRow(plain, row);
+      if (row && saved) {
+        if (sb) await bumpUses(sb, row);
+        out.push(saved);
+        continue;
       }
+
+      // 2. A free ready-made model, re-hosted so it can't vanish or hit CORS.
+      const visitor = await hashVisitor(ip);
+      const canSave = sb ? (await countToday(sb, visitor)) < perVisitorCap() : false;
+      const poly = actor.search_terms ? await searchPolyPizza(actor.search_terms) : null;
+      if (poly) {
+        let url = poly.download;
+        if (sb && canSave) {
+          const glb = await fetch(poly.download);
+          if (glb.ok) url = await uploadModel(sb, key, await glb.arrayBuffer());
+        }
+        const attribution = creditLine(poly);
+        if (sb && canSave)
+          await insertRow(sb, {
+            key,
+            name: actor.label || key,
+            source: "polypizza",
+            model_url: url,
+            attribution: attribution ?? null,
+            license: poly.license,
+            requested_by: visitor,
+          });
+        out.push({ ...plain, model_url: url, attribution, recipe: undefined, fresh: true });
+        continue;
+      }
+
+      // 3. Claude's own design.
+      if (actor.recipe?.parts.length) {
+        if (sb && canSave)
+          await insertRow(sb, {
+            key,
+            name: actor.label || key,
+            source: "recipe",
+            recipe: actor.recipe,
+            requested_by: visitor,
+          });
+        out.push({ ...plain, fresh: true });
+        continue;
+      }
+
+      out.push({ ...plain, model_key: undefined });
     } catch (error) {
       console.error("Custom actor lookup failed", error);
-      out.push(plain);
+      out.push(actor.recipe?.parts.length ? plain : { ...plain, model_key: undefined });
     }
   }
   return out;
-}
-
-/** Checks on a model being generated; finishes and re-hosts it when Meshy is done. */
-export async function pollCustomActor(key: string): Promise<CustomActorState> {
-  const c = config();
-  if (!c) return { key, status: "unavailable" };
-  const row = await getRow(c, key);
-  if (!row) return { key, status: "unavailable" };
-  if (row.status === "ready" && row.model_url) return { key, status: "ready", url: row.model_url };
-  if (row.status === "failed" || !row.meshy_task_id) return { key, status: "failed" };
-
-  const task = await checkMeshy(c, row.meshy_task_id);
-  if (task.status === "FAILED" || task.status === "CANCELED") {
-    await patchRow(c, key, { status: "failed" });
-    return { key, status: "failed" };
-  }
-  if (task.status !== "SUCCEEDED" || !task.model_urls?.glb) return { key, status: "pending" };
-
-  // Meshy's download links expire, so keep our own copy.
-  const glb = await fetch(task.model_urls.glb);
-  if (!glb.ok) throw new Error(`Model download failed: ${glb.status}`);
-  const url = await uploadModel(c, key, await glb.arrayBuffer());
-  await patchRow(c, key, { status: "ready", model_url: url });
-  return { key, status: "ready", url };
 }

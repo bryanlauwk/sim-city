@@ -1,5 +1,4 @@
 import { createServerFn } from "@tanstack/react-start";
-import { z } from "zod";
 import { simulateInputSchema } from "./schema";
 import type { EventResult } from "./types";
 
@@ -37,40 +36,14 @@ export const simulateEvent = createServerFn({ method: "POST" })
 
     const { runNewsroom, NewsroomError } = await import("./newsroom.server");
     try {
-      const { result, refused } = await runNewsroom(data);
-      // Attach generated models, or start generating new ones (see actorLibrary.server).
-      const { resolveCustomActors } = await import("./actorLibrary.server");
+      const { libraryIndex, resolveCustomActors } = await import("./actorLibrary.server");
+      const { result, refused } = await runNewsroom(data, await libraryIndex());
+      // Give custom actors a model: shared library, Poly Pizza, or Claude's recipe.
       result.spectacle.actors = await resolveCustomActors(result.spectacle.actors, ip);
       return { ok: true, result, refused };
     } catch (error) {
       if (error instanceof NewsroomError) return { ok: false, error: error.message };
       console.error(error);
       return { ok: false, error: "Something went wrong in the newsroom." };
-    }
-  });
-
-const pollHits = new Map<string, number[]>();
-
-export type PollActorResponse =
-  | { status: "ready"; url: string }
-  | { status: "pending" | "failed" | "unavailable" };
-
-/** Clients poll this while a generated actor is being sculpted. */
-export const pollActor = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) =>
-    z.object({ key: z.string().regex(/^[a-z0-9-]{1,48}$/) }).parse(data),
-  )
-  .handler(async ({ data }): Promise<PollActorResponse> => {
-    const ip = await requestIp();
-    if (throttled(ip, pollHits, 30)) return { status: "pending" };
-    const { pollCustomActor } = await import("./actorLibrary.server");
-    try {
-      const r = await pollCustomActor(data.key);
-      return r.status === "ready" && r.url
-        ? { status: "ready", url: r.url }
-        : { status: r.status === "ready" ? "pending" : r.status };
-    } catch (error) {
-      console.error("Actor poll failed", error);
-      return { status: "pending" };
     }
   });

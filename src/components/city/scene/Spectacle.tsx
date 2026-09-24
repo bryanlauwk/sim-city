@@ -2,7 +2,15 @@ import { Suspense, useEffect, useMemo, useRef } from "react";
 import { useGLTF } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import type { Actor, ActorKind, ActorShape, CrowdReaction, Responder } from "@/lib/city/types";
+import type {
+  Actor,
+  ActorKind,
+  ActorShape,
+  CrowdReaction,
+  Recipe,
+  RecipeShape,
+  Responder,
+} from "@/lib/city/types";
 import { hash, type WorldBus } from "./common";
 
 import {
@@ -24,8 +32,6 @@ export interface SpectacleRun {
   responders: Responder[];
   focus: { x: number; z: number };
   radius: number;
-  /** An encore for a model that just finished generating. */
-  fresh?: boolean;
 }
 
 /** Seconds after start when each kind of actor makes contact. */
@@ -660,8 +666,8 @@ function ImpactBurst({
 }
 
 // ---------------------------------------------------------------------------
-// Generated actors: a Meshy model from the shared library, dressed in the
-// city's flat-shaded style and moved like its built-in stand-in.
+// Custom actors from the shared library: a ready-made Poly Pizza model, or
+// Claude's own recipe of primitives. Both move like their built-in stand-in.
 // ---------------------------------------------------------------------------
 
 const WALKERS = new Set<ActorKind>(["kaiju", "creature", "tapir", "monitor_lizard", "lion_dance"]);
@@ -674,27 +680,85 @@ const FLYERS = new Set<ActorKind>([
   "fireworks",
 ]);
 
-function GeneratedMesh({ url, color }: { url: string; color: string }) {
+/** Scale an object to a 1.2-unit footprint, resting on the ground. */
+function normalise(o: THREE.Object3D) {
+  const box = new THREE.Box3().setFromObject(o);
+  const size = box.getSize(new THREE.Vector3());
+  const k = 1.2 / Math.max(size.x, size.y, size.z, 0.001);
+  const centre = box.getCenter(new THREE.Vector3());
+  o.scale.setScalar(k);
+  o.position.set(-centre.x * k, -box.min.y * k, -centre.z * k);
+}
+
+/** A ready-made model keeps its own colours; it just learns to cast shadows. */
+function ModelMesh({ url }: { url: string }) {
   const { scene } = useGLTF(url);
   const object = useMemo(() => {
     const o = scene.clone(true);
-    const mat = new THREE.MeshStandardMaterial({ color, flatShading: true, roughness: 0.7 });
     o.traverse((c) => {
       const m = c as THREE.Mesh;
-      if (!m.isMesh) return;
-      m.material = mat;
-      m.castShadow = true;
+      if (m.isMesh) m.castShadow = true;
     });
-    // Normalise to a unit footprint, resting on the ground.
-    const box = new THREE.Box3().setFromObject(o);
-    const size = box.getSize(new THREE.Vector3());
-    const k = 1.2 / Math.max(size.x, size.y, size.z, 0.001);
-    const centre = box.getCenter(new THREE.Vector3());
-    o.scale.setScalar(k);
-    o.position.set(-centre.x * k, -box.min.y * k, -centre.z * k);
+    normalise(o);
     return o;
-  }, [scene, color]);
+  }, [scene]);
   return <primitive object={object} />;
+}
+
+const RECIPE_GEOMETRY: Record<RecipeShape, () => THREE.BufferGeometry> = {
+  box: () => new THREE.BoxGeometry(1, 1, 1),
+  sphere: () => new THREE.SphereGeometry(0.5, 12, 8),
+  cylinder: () => new THREE.CylinderGeometry(0.5, 0.5, 1, 12),
+  cone: () => new THREE.ConeGeometry(0.5, 1, 12),
+  torus: () => new THREE.TorusGeometry(0.4, 0.1, 8, 20),
+  capsule: () => new THREE.CapsuleGeometry(0.5, 1, 4, 10).scale(1, 0.5, 1),
+};
+
+/** Claude's design, built from primitives in the city's flat-shaded style. */
+function RecipeMesh({ recipe }: { recipe: Recipe }) {
+  const object = useMemo(() => {
+    const root = new THREE.Group();
+    const inner = new THREE.Group();
+    root.add(inner);
+    const geos = new Map<RecipeShape, THREE.BufferGeometry>();
+    const mats = new Map<string, THREE.Material>();
+    const d = THREE.MathUtils.degToRad;
+    for (const p of recipe.parts) {
+      if (!geos.has(p.shape)) geos.set(p.shape, RECIPE_GEOMETRY[p.shape]());
+      if (!mats.has(p.color))
+        mats.set(
+          p.color,
+          new THREE.MeshStandardMaterial({ color: p.color, flatShading: true, roughness: 0.7 }),
+        );
+      const m = new THREE.Mesh(geos.get(p.shape), mats.get(p.color));
+      m.position.set(p.x, p.y, p.z);
+      m.scale.set(p.sx, p.sy, p.sz);
+      m.rotation.set(d(p.rx), d(p.ry), d(p.rz));
+      m.castShadow = true;
+      inner.add(m);
+    }
+    normalise(inner);
+    return root;
+  }, [recipe]);
+  useEffect(
+    () => () =>
+      object.traverse((c) => {
+        const m = c as THREE.Mesh;
+        if (!m.isMesh) return;
+        m.geometry.dispose();
+        (m.material as THREE.Material).dispose();
+      }),
+    [object],
+  );
+  return <primitive object={object} />;
+}
+
+function Spin({ getT, children }: { getT: () => number; children: React.ReactNode }) {
+  const ref = useRef<THREE.Group>(null);
+  useFrame(() => {
+    if (ref.current) ref.current.rotation.y = getT() * 3;
+  });
+  return <group ref={ref}>{children}</group>;
 }
 
 /** Sparkles to announce a model fresh from the studio. */
@@ -735,15 +799,24 @@ function Hover({ a, focus, getT, impact, children }: ActorProps & { children: Re
   return <group ref={ref}>{children}</group>;
 }
 
-function GeneratedActor(p: ActorProps & { fresh: boolean }) {
+function CustomActor(p: ActorProps) {
+  const { a } = p;
+  const motion = a.recipe?.motion;
   const body = (
     <Suspense fallback={null}>
-      <GeneratedMesh url={p.a.model_url!} color={p.a.color} />
-      {p.fresh && <StudioSparkle getT={p.getT} />}
+      {a.model_url ? <ModelMesh url={a.model_url} /> : <RecipeMesh recipe={a.recipe!} />}
+      {a.fresh && <StudioSparkle getT={p.getT} />}
     </Suspense>
   );
-  if (WALKERS.has(p.a.kind)) return <Stomper {...p}>{body}</Stomper>;
-  if (FLYERS.has(p.a.kind)) return <Hover {...p}>{body}</Hover>;
+  if (motion === "walk" || (!motion && WALKERS.has(a.kind)))
+    return <Stomper {...p}>{body}</Stomper>;
+  if (motion === "hover" || (!motion && FLYERS.has(a.kind))) return <Hover {...p}>{body}</Hover>;
+  if (motion === "spin")
+    return (
+      <Faller {...p}>
+        <Spin getT={p.getT}>{body}</Spin>
+      </Faller>
+    );
   return <Faller {...p}>{body}</Faller>;
 }
 
@@ -846,7 +919,7 @@ export function SpectacleView({
           bus,
           seed: run.id * 31 + i,
         };
-        if (a.model_url) return <GeneratedActor key={i} {...p} fresh={!!run.fresh} />;
+        if (a.model_url || a.recipe?.parts.length) return <CustomActor key={i} {...p} />;
         switch (a.kind) {
           case "whale":
             return <Whale key={i} {...p} />;

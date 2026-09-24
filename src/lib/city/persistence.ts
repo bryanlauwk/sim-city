@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { eventResultSchema } from "./schema";
 import { replay } from "./simulation";
-import type { CityState } from "./types";
+import type { CityState, EventRecord } from "./types";
 
 const CITY_KEY = "type-a-disaster:golden-triangle";
 const CREDITS_KEY = "type-a-disaster:credits";
@@ -41,9 +41,28 @@ export function loadCity(): CityState | null {
   }
 }
 
+/**
+ * The event log without custom model data: spectacles aren't replayed, so
+ * recipes and model links would only bloat saves and share links. Credits stay.
+ */
+function lean(log: EventRecord[]): EventRecord[] {
+  return log.map((e) => ({
+    ...e,
+    result: {
+      ...e.result,
+      spectacle: {
+        ...e.result.spectacle,
+        actors: e.result.spectacle.actors.map(
+          ({ recipe: _r, model_url: _u, search_terms: _s, fresh: _f, ...a }) => a,
+        ),
+      },
+    },
+  }));
+}
+
 /** Only the seed + event log are stored; the city is rebuilt by replay. */
 export function saveCity(s: CityState) {
-  write(CITY_KEY, JSON.stringify({ v: 4, seed: s.seed, day: s.day, log: s.log }));
+  write(CITY_KEY, JSON.stringify({ v: 4, seed: s.seed, day: s.day, log: lean(s.log) }));
 }
 
 export function clearCity() {
@@ -132,7 +151,7 @@ async function pipe(bytes: Uint8Array, stream: CompressionStream | Decompression
 }
 
 export async function encodeShare(s: CityState): Promise<string> {
-  const payload: Shared = { v: 4, seed: s.seed, day: s.day, log: s.log };
+  const payload: Shared = { v: 4, seed: s.seed, day: s.day, log: lean(s.log) };
   const bytes = new TextEncoder().encode(JSON.stringify(payload));
   return toBase64Url(await pipe(bytes, new CompressionStream("deflate-raw")));
 }

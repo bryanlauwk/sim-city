@@ -15,6 +15,9 @@ function Story({
   pending: number;
 }) {
   const r = ev.result;
+  const credits = [
+    ...new Set(r.spectacle.actors.map((a) => a.attribution).filter((c): c is string => !!c)),
+  ];
   return (
     <article className={cn("border-b border-ink/20 pb-4", lead ? "pt-1" : "pt-3")}>
       <div className="mb-1 flex items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
@@ -51,6 +54,11 @@ function Story({
             </blockquote>
           ))}
         </div>
+      )}
+      {credits.length > 0 && (
+        <p className="mt-2 text-[10px] leading-snug text-muted-foreground">
+          3D model{credits.length > 1 ? "s" : ""}: {credits.join(" · ")}
+        </p>
       )}
       {updates.length > 0 && (
         <ul className="mt-3 space-y-1.5 border-t border-dashed border-ink/30 pt-2">
