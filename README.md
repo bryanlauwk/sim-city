@@ -1,74 +1,46 @@
-# Sim City
+# Type-a-Disaster
 
-Turn into a proper game dev prompt
+A tiny low-poly city runs itself. You type what happens to it ("a whale lands on city hall", "the mayor legalizes jetpacks") and Claude decides the consequences: buildings burn, flood or appear, stats swing, and the town paper prints a deadpan front page about it.
 
-...
+## How it plays
 
-The creation of the Terrarium Simulator game was entirely orchestrated using an advanced multi-agent AI development workflow. Instead of coding it by hand, the developer acted as a product manager, outsourcing the core mechanics and structure to autonomous AI workers.
+- **The city grows on its own.** It's a 16×16 grid of roads, houses, shops, towers and parks. One day passes every 2 seconds (4× with fast-forward). Happy, solvent cities expand; polluted, chaotic ones decline.
+- **You type events.** Each event goes to Claude, which returns structured effects: stat changes, tile operations (destroy, burn, flood, build, landmark, clear), an optional lingering effect, and a headline with quotes from residents.
+- **Event credits.** You get 5, and one refills every 10 minutes. Claude rates each event's scale: minor costs 1 credit, citywide 2, apocalyptic 3. Refused events cost nothing.
+- **Your city, shareable.** Your city is saved in the browser. The share button makes a link that replays your city's full history from its seed and event log.
+- **No game over, just an obituary.** If the population hits zero, the paper runs your city's obituary. You can start a new city or type something that revives it.
 
-Here is a breakdown of how many AI agents were used, how they built the game, and the underlying gameplay mechanisms they created.
+## Setup: Anthropic API key
 
-1. The Development Workflow & AI Agents
+Events need an Anthropic API key, which stays on the server (a TanStack Start server function running on the Cloudflare Worker).
 
-The developer utilized 3 distinct Cursor Cloud Agents to build the game simultaneously in the background.
+1. Create a key at [console.anthropic.com](https://console.anthropic.com) → Settings → API Keys. Also set a monthly spend limit under Settings → Limits.
+2. Add it as a secret named `ANTHROPIC_API_KEY`:
+   - **Lovable:** Project settings → Secrets.
+   - **Wrangler:** `npx wrangler secret put ANTHROPIC_API_KEY`
+   - **Local dev:** copy `.dev.vars.example` to `.dev.vars` (it's git-ignored), or export the variable in your shell before running `npm run dev`.
+3. Optional: set `CITY_MODEL` to use a different Claude model. The default is `claude-opus-5`, run at low effort.
 
-Cursor Cloud Agents operate by spinning up isolated virtual machines in the cloud. Each agent clones the repository, installs its own dependencies, and spins up a dedicated development environment with a virtual terminal and a Chrome browser. This allows them to independently build, run, and visually test their code before submitting a finished feature.
+Without a key the game still runs, but typed events show a "newsroom is closed" message.
 
-The developer divided the project by assigning one core responsibility to each agent:
+## Code map
 
-Agent 1: The UI & Frontend Engineer
+| Path | What it does |
+| --- | --- |
+| `src/lib/city/simulation.ts` | Deterministic sim: city creation, daily tick, applying events, replay |
+| `src/lib/city/schema.ts` | Zod validation and clamping of event results, plus the JSON schema sent to Claude |
+| `src/lib/city/newsroom.server.ts` | Server-only Claude call (structured output, refusal fallback) |
+| `src/lib/city/simulate.functions.ts` | Server function the page calls, with a per-IP throttle |
+| `src/lib/city/persistence.ts` | localStorage save, credits, share-link encoding |
+| `src/components/city/CityScene.tsx` | three.js / react-three-fiber scene |
+| `src/components/city/Newspaper.tsx` | The Gazette sidebar |
+| `src/routes/index.tsx` | The game page |
 
-Task: Built the visual user interface (UI) of the application.
+Run `npm run test` (uses Bun) for the simulation tests.
 
-Result: Created the pixel-art layout, the left-hand selection sidebar (where players choose their materials), and the central visual display of the glass terrarium.
+## Credits
 
-Agent 2: The Core Simulation Engineer
-
-Task: Programmed the ecosystem simulation rules.
-
-Result: Programmed how the different entities (plants, soil, and bugs) interact with one another and how variables like moisture affect life cycles.
-
-Agent 3: The Time Progression Engineer
-
-Task: Built the time-lapse and progression engine.
-
-Result: Created the mechanism that fast-forwards time when the player presses "Play," allowing real-time calculations to simulate days and weeks in mere seconds.
-
-While the developer was away from her desk, these agents worked in parallel on separate Git branches, ran end-to-end testing, and sent her video demos of their working components for final review.
-
-2. The Game Mechanisms
-
-The game itself is a complex balancing simulator masquerading as a cozy, pixel-art casual game. The underlying gameplay mechanisms rely heavily on environmental math and biodiversity scoring:
-
-🌿 Habitat Customization & Setup
-
-Before starting the simulation, players pick and choose specific ingredients to build their closed ecological system:
-
-Substrate (Soil): Players select the type of foundation dirt.
-
-Flora (Plants): Options include pixel-art vegetation like ferns and moss.
-
-Fauna (Creatures): Players add micro-fauna like snails, ants, and isopods (pill bugs).
-
-Atmosphere: Players set specific baseline sliders, most notably the Humidity Level.
-
-⚙️ The Core Simulation Loop
-
-Once the player hits the Play button, the background logic begins calculating how these items interact based on mathematical variables:
-
-Moisture & Humidity: The simulation monitors a dynamic moisture score. If the environment is too dry, plants wither. If it is too humid, specific species may die out or mold might take over.
-
-Biodiversity Tracking: The game tracks 5 distinct ecosystem layers simultaneously (soil type, flora, fauna, moisture, and time).
-
-Longevity Score: The primary metric of success is the Longevity Counter (measured in simulated days).
-
-☠️ Win/Loss Conditions
-
-The Eco-Balance (Win): If the combinations of plants, bugs, moisture, and soil are perfectly balanced, the ecosystem sustains itself indefinitely. A successfully balanced terrarium can survive for over 365 simulated days.
-
-Ecosystem Collapse (Loss): If a single element falls out of balance (e.g., a snail consumes all the flora, or lack of humidity kills off the moss), a chain reaction triggers an "Ecosystem Collapsed" screen, showing the exact number of days survived and the final score.
-
-This project was built with [Lovable](https://lovable.dev).
+The 3D buildings and trees are from Kenney's [City Kit (Commercial)](https://kenney.nl/assets/city-kit-commercial) and [City Kit (Suburban)](https://kenney.nl/assets/city-kit-suburban), released under CC0. Landmarks, fire, rubble and floods are generated in code.
 
 ## Build with Lovable
 

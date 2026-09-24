@@ -1,7 +1,6 @@
 @import "tailwindcss" source(none);
 @source "../src";
 @import "tw-animate-css";
-@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@300;400;500;600;700&display=swap");
 
 @custom-variant dark (&:is(.dark *));
 
@@ -60,34 +59,43 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-ink: var(--ink);
+  --color-paper: var(--paper);
+  --color-newsprint: var(--newsprint);
+  --color-stamp: var(--stamp);
+  --color-leaf: var(--leaf);
+  --color-sky: var(--sky);
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
 }
 
 :root {
-  --radius: 0.625rem;
-  /* Botanical journal: ivory parchment, deep forest, aged brass */
-  --background: oklch(0.97 0.012 85);
-  --foreground: oklch(0.22 0.02 145);
-  --card: oklch(0.99 0.008 85 / 80%);
-  --card-foreground: oklch(0.22 0.02 145);
-  --popover: oklch(0.98 0.01 85);
-  --popover-foreground: oklch(0.22 0.02 145);
-  --primary: oklch(0.36 0.06 150);
-  --primary-foreground: oklch(0.97 0.012 85);
-  --secondary: oklch(0.93 0.018 80);
-  --secondary-foreground: oklch(0.28 0.04 150);
-  --muted: oklch(0.94 0.012 80);
-  --muted-foreground: oklch(0.48 0.02 100);
-  --accent: oklch(0.68 0.11 75);
-  --accent-foreground: oklch(0.22 0.04 60);
-  --destructive: oklch(0.5 0.18 28);
-  --destructive-foreground: oklch(0.97 0.012 85);
-  --border: oklch(0.86 0.015 80);
-  --input: oklch(0.92 0.012 80);
-  --ring: oklch(0.68 0.11 75);
-  --brass: oklch(0.7 0.12 75);
-  --brass-deep: oklch(0.52 0.1 70);
-  --forest: oklch(0.32 0.06 150);
-  --moss: oklch(0.55 0.12 145);
+  --radius: 0.25rem;
+  /* Small-town newsprint: warm paper, black ink, a red rubber stamp */
+  --ink: oklch(0.2 0.01 60);
+  --paper: oklch(0.97 0.012 90);
+  --newsprint: oklch(0.945 0.014 88);
+  --stamp: oklch(0.52 0.19 28);
+  --leaf: oklch(0.5 0.12 150);
+  --sky: oklch(0.9 0.03 225);
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --card: var(--paper);
+  --card-foreground: var(--ink);
+  --popover: var(--paper);
+  --popover-foreground: var(--ink);
+  --primary: var(--ink);
+  --primary-foreground: var(--paper);
+  --secondary: oklch(0.92 0.012 88);
+  --secondary-foreground: var(--ink);
+  --muted: oklch(0.92 0.012 88);
+  --muted-foreground: oklch(0.45 0.015 70);
+  --accent: oklch(0.9 0.02 85);
+  --accent-foreground: var(--ink);
+  --destructive: var(--stamp);
+  --destructive-foreground: var(--paper);
+  --border: oklch(0.8 0.015 80);
+  --input: oklch(0.85 0.012 80);
+  --ring: var(--ink);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -147,36 +155,11 @@
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: "Inter", system-ui, sans-serif;
-    font-feature-settings: "ss01", "cv11";
-    background-image:
-      radial-gradient(ellipse at 15% 0%, oklch(0.94 0.03 130 / 0.45) 0, transparent 55%),
-      radial-gradient(ellipse at 85% 100%, oklch(0.9 0.04 75 / 0.4) 0, transparent 55%),
-      /* paper grain */
-      repeating-radial-gradient(circle at 30% 40%, oklch(0.5 0.02 80 / 0.012) 0, transparent 2px),
-      repeating-radial-gradient(circle at 70% 60%, oklch(0.3 0.02 60 / 0.012) 0, transparent 3px);
   }
 
   .font-serif-d {
-    font-family: "Fraunces", "Cormorant Garamond", Georgia, serif;
+    font-family: "Fraunces", Georgia, serif;
     font-optical-sizing: auto;
     letter-spacing: -0.01em;
-  }
-
-  .hairline {
-    border-color: oklch(0.78 0.02 80);
-  }
-
-  .brass-text {
-    color: var(--brass-deep);
-  }
-
-  @keyframes terrarium-bob {
-    0%, 100% { transform: translate(-50%, -50%) translateY(0); }
-    50% { transform: translate(-50%, -50%) translateY(-1.5px); }
-  }
-
-  @keyframes terrarium-sway {
-    0%, 100% { transform: translateX(-50%) rotate(-0.6deg); }
-    50% { transform: translateX(-50%) rotate(0.6deg); }
   }
 }
