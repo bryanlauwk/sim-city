@@ -3,14 +3,14 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import type { CityState } from "@/lib/city/types";
-import { Buildings } from "./scene/Buildings";
+import { Buildings, LocalHouses } from "./scene/Buildings";
 import { createBus, type WorldBus } from "./scene/common";
 import { Ground, StreetLamps, Trees } from "./scene/Ground";
 import { Life } from "./scene/Life";
 import { Rail } from "./scene/Rail";
 import { Sky } from "./scene/Sky";
 import { SpectacleView, type SpectacleRun } from "./scene/Spectacle";
-import { TileFx } from "./scene/TileFx";
+import { LandmarkLabels, TileFx } from "./scene/TileFx";
 
 export type { SpectacleRun };
 
@@ -43,6 +43,9 @@ function Shaker({ bus, children }: { bus: WorldBus; children: React.ReactNode })
   return <group ref={ref}>{children}</group>;
 }
 
+const OPENING_TARGET = [4, 0, -2] as const;
+const OPENING_CAMERA: [number, number, number] = [-6, 13, 16];
+
 /** Swoops the camera toward the action when a spectacle starts. */
 function CameraDirector({ run }: { run: SpectacleRun | null }) {
   const controls = useThree((s) => s.controls) as unknown as {
@@ -58,6 +61,15 @@ function CameraDirector({ run }: { run: SpectacleRun | null }) {
     toTarget: THREE.Vector3;
     toPos: THREE.Vector3;
   } | null>(null);
+
+  // Opening shot: Bukit Bintang in front, the Petronas Towers behind.
+  const framed = useRef(false);
+  useEffect(() => {
+    if (!controls || framed.current) return;
+    framed.current = true;
+    controls.target.set(OPENING_TARGET[0], 0, OPENING_TARGET[2]);
+    controls.update();
+  }, [controls]);
 
   useEffect(() => {
     if (!run || !controls) return;
@@ -95,9 +107,18 @@ export interface CitySceneProps {
   onSpectacleDone: (id: number) => void;
   /** Bumped when a chain-reaction bulletin fires, for a small tremor. */
   tremor: number;
+  showLabels: boolean;
 }
 
-function CityScene({ city, clock, spectacle, onImpact, onSpectacleDone, tremor }: CitySceneProps) {
+function CityScene({
+  city,
+  clock,
+  spectacle,
+  onImpact,
+  onSpectacleDone,
+  tremor,
+  showLabels,
+}: CitySceneProps) {
   const small = typeof window !== "undefined" && window.innerWidth < 640;
   const bus = useMemo(createBus, []);
   const clockRef = useRef(clock);
@@ -123,7 +144,7 @@ function CityScene({ city, clock, spectacle, onImpact, onSpectacleDone, tremor }
     <Canvas
       shadows={small ? false : "percentage"}
       dpr={[1, small ? 1.5 : 2]}
-      camera={{ position: [19, 18, 19], fov: 40, far: 200 }}
+      camera={{ position: OPENING_CAMERA, fov: 40, far: 200 }}
       gl={{ antialias: true }}
     >
       <Sky
@@ -140,7 +161,9 @@ function CityScene({ city, clock, spectacle, onImpact, onSpectacleDone, tremor }
         <Trees grid={city.grid} />
         <StreetLamps grid={city.grid} />
         <Buildings grid={city.grid} />
+        <LocalHouses grid={city.grid} />
         <TileFx grid={city.grid} />
+        {showLabels && <LandmarkLabels grid={city.grid} />}
         <Rail />
         <Life city={city} bus={bus} />
         {spectacle && (

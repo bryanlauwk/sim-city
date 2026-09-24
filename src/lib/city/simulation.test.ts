@@ -50,7 +50,9 @@ describe("city simulation", () => {
     expect(s.name).toBe("Kuala Lumpur");
     expect(c.road).toBeGreaterThan(150);
     expect(c.water).toBeGreaterThan(30);
-    expect(c.forest).toBeGreaterThan(50);
+    expect(c.forest).toBeGreaterThan(30);
+    expect(s.grid.some((t) => t.landmark?.name === "Pavilion Kuala Lumpur")).toBe(true);
+    expect(s.grid.some((t) => t.landmark?.name === "Merdeka 118")).toBe(true);
     expect(s.grid.some((t) => t.landmark?.name === "Petronas Twin Towers")).toBe(true);
     expect(c.house + c.shop + c.tower).toBeGreaterThan(10);
     expect(s.stats.population).toBeGreaterThan(0);
@@ -103,7 +105,7 @@ describe("city simulation", () => {
     for (const i of burning) {
       const x = i % 32;
       const y = Math.floor(i / 32);
-      expect(x >= 12 && x <= 16 && y >= 15 && y <= 19).toBe(true);
+      expect(x >= 6 && x <= 9 && y >= 17 && y <= 25).toBe(true);
     }
   });
 

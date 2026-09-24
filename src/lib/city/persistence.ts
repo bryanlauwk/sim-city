@@ -3,7 +3,7 @@ import { eventResultSchema } from "./schema";
 import { replay } from "./simulation";
 import type { CityState } from "./types";
 
-const CITY_KEY = "type-a-disaster:kl-city";
+const CITY_KEY = "type-a-disaster:kl-centre";
 const CREDITS_KEY = "type-a-disaster:credits";
 
 export const MAX_CREDITS = 5;
@@ -43,7 +43,7 @@ export function loadCity(): CityState | null {
 
 /** Only the seed + event log are stored; the city is rebuilt by replay. */
 export function saveCity(s: CityState) {
-  write(CITY_KEY, JSON.stringify({ v: 2, seed: s.seed, day: s.day, log: s.log }));
+  write(CITY_KEY, JSON.stringify({ v: 3, seed: s.seed, day: s.day, log: s.log }));
 }
 
 export function clearCity() {
@@ -94,8 +94,8 @@ export function spendCredits(c: Credits, amount: number): Credits {
 // ---------------------------------------------------------------------------
 
 const sharedSchema = z.object({
-  // v1 cities were a generic 16×16 town and can't be replayed on the KL map.
-  v: z.literal(2),
+  // Earlier versions used different maps and can't be replayed on this one.
+  v: z.literal(3),
   seed: z.number().int(),
   day: z.number().int().min(0).max(100000),
   log: z
@@ -132,7 +132,7 @@ async function pipe(bytes: Uint8Array, stream: CompressionStream | Decompression
 }
 
 export async function encodeShare(s: CityState): Promise<string> {
-  const payload: Shared = { v: 2, seed: s.seed, day: s.day, log: s.log };
+  const payload: Shared = { v: 3, seed: s.seed, day: s.day, log: s.log };
   const bytes = new TextEncoder().encode(JSON.stringify(payload));
   return toBase64Url(await pipe(bytes, new CompressionStream("deflate-raw")));
 }

@@ -1,6 +1,6 @@
 import { ClientOnly, createFileRoute } from "@tanstack/react-router";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { FastForward, Loader2, Pause, Play, RotateCcw, Send, Share2 } from "lucide-react";
+import { FastForward, Loader2, Pause, Play, RotateCcw, Send, Share2, Tag } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
@@ -62,13 +62,13 @@ export const Route = createFileRoute("/")({
 
 const DAY_MS = 12000;
 const SUGGESTIONS = [
-  "A whale lands on Dataran Merdeka",
-  "Godzilla stomps through Bukit Bintang",
+  "A whale lands on Pavilion KL",
+  "Godzilla stomps down Jalan Bukit Bintang",
   "A UFO hovers over the Petronas Towers",
   "A thousand monkeys escape from Bukit Nanas",
-  "It rains durians over Chinatown",
+  "It rains durians on Jalan Alor",
   "Flash flood at Masjid Jamek",
-  "Fireworks for Merdeka Day at KLCC",
+  "Merdeka Day fireworks over KLCC",
 ];
 const C = (GRID_SIZE - 1) / 2;
 
@@ -154,6 +154,7 @@ function Index() {
   const [shared, setShared] = useState(false);
   const [paused, setPaused] = useState(false);
   const [fast, setFast] = useState(false);
+  const [labels, setLabels] = useState(true);
   const [credits, setCredits] = useState<Credits>({ credits: MAX_CREDITS, since: 0 });
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -391,6 +392,7 @@ function Index() {
                   onImpact={commit}
                   onSpectacleDone={endSpectacle}
                   tremor={tremor}
+                  showLabels={labels}
                 />
               ) : (
                 <SceneFallback />
@@ -469,6 +471,20 @@ function Index() {
             title="Fast forward"
           >
             <FastForward />
+          </Button>
+          <Button
+            size="icon"
+            variant="outline"
+            className={cn(
+              "rounded-none border-ink bg-paper/90",
+              labels && "bg-ink text-paper hover:bg-ink/90 hover:text-paper",
+            )}
+            onClick={() => setLabels((l) => !l)}
+            aria-label="Landmark labels"
+            aria-pressed={labels}
+            title="Landmark labels"
+          >
+            <Tag />
           </Button>
           <Button
             size="icon"

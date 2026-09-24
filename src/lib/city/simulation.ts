@@ -114,7 +114,7 @@ export function natureScore(grid: Tile[], pollution: number): number {
   const c = countKinds(grid);
   const land = grid.length - c.water;
   const green = (c.forest + c.park * 0.7) / Math.max(1, land);
-  return Math.round(Math.min(100, Math.max(0, green * 380 - pollution * 0.3)));
+  return Math.round(Math.min(100, Math.max(0, green * 750 - pollution * 0.3)));
 }
 
 const nearRoad = (s: CityState, i: number) => NEIGHBORS[i].some((n) => s.grid[n].kind === "road");
@@ -173,7 +173,7 @@ export function createCity(seed: number): CityState {
     }
     const road = nearRoad(s, i);
     if (rand(s) < d.density * (road ? 1 : 0.55)) setKind(s, i, pickKind(s, i));
-    else if (d.id === "outskirts" && !road && rand(s) < 0.35) setKind(s, i, "forest");
+    else if (d.id === "outskirts" && !road && rand(s) < 0.12) setKind(s, i, "forest");
   }
 
   s.stats.population = capacity(countKinds(s.grid));
@@ -333,7 +333,7 @@ export function tick(prev: CityState): CityState {
   st.money += taxes - upkeep;
 
   const targetPollution =
-    c.tower * 0.45 + c.shop * 0.12 + c.road * 0.06 + fires * 3 - c.park * 0.4 - c.forest * 0.12;
+    c.tower * 0.28 + c.shop * 0.08 + c.road * 0.04 + fires * 3 - c.park * 0.4 - c.forest * 0.15;
   st.pollution += (targetPollution - st.pollution) * 0.1;
 
   const nature = natureScore(s.grid, st.pollution);
