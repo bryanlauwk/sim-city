@@ -173,7 +173,7 @@ function Index() {
         },
       });
       if (!res.ok) {
-        toast.error(res.error);
+        toast.error(res.error, { duration: 12000 });
         return;
       }
       const { result, refused } = res;
