@@ -50,30 +50,34 @@ Recent headlines: ${city.recentHeadlines.length ? city.recentHeadlines.map((h) =
 The visitor typed this event:
 <event>${event}</event>`;
 
+  const params = {
+    model: process.env.CITY_MODEL || DEFAULT_MODEL,
+    max_tokens: 4000,
+    output_config: {
+      effort: "low" as const,
+      format: { type: "json_schema" as const, schema: eventResultJsonSchema },
+    },
+    system: SYSTEM_PROMPT,
+    messages: [{ role: "user" as const, content: userMessage }],
+  };
+
   let response: Anthropic.Beta.BetaMessage;
   try {
-    response = await client.beta.messages.create({
-      model: process.env.CITY_MODEL || DEFAULT_MODEL,
-      max_tokens: 4000,
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
-      output_config: {
-        effort: "low",
-        format: { type: "json_schema", schema: eventResultJsonSchema },
-      },
-      system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: userMessage }],
-    });
-  } catch (error) {
-    if (error instanceof Anthropic.AuthenticationError)
-      throw new NewsroomError("The newsroom's API key was rejected.");
-    if (error instanceof Anthropic.RateLimitError)
-      throw new NewsroomError("The newsroom is swamped. Try again in a minute.");
-    if (error instanceof Anthropic.APIError) {
-      console.error("Claude API error", error.status, error.message);
-      throw new NewsroomError("The newsroom's printing press jammed. Try again.");
+    // Refusal fallbacks are a beta; if the request is rejected (e.g. the beta
+    // isn't enabled for this account), retry once as a plain request.
+    try {
+      response = await client.beta.messages.create({
+        ...params,
+        betas: ["server-side-fallback-2026-07-01"],
+        fallbacks: "default",
+      });
+    } catch (error) {
+      if (!(error instanceof Anthropic.BadRequestError)) throw error;
+      console.warn("Retrying without refusal fallbacks:", apiMessage(error));
+      response = await client.beta.messages.create(params);
     }
-    throw error;
+  } catch (error) {
+    throw describeApiError(error);
   }
 
   if (response.stop_reason === "refusal") return { result: REFUSED, refused: true };
@@ -83,10 +87,48 @@ The visitor typed this event:
   const text = response.content.find((b) => b.type === "text");
   if (!text || text.type !== "text") throw new NewsroomError("The newsroom filed a blank page.");
 
-  const parsed = eventResultSchema.safeParse(JSON.parse(text.text));
+  let json: unknown;
+  try {
+    json = JSON.parse(text.text);
+  } catch {
+    throw new NewsroomError("The newsroom filed an unreadable story. Try again.");
+  }
+  const parsed = eventResultSchema.safeParse(json);
   if (!parsed.success) {
     console.error("Unexpected newsroom output", parsed.error.flatten());
     throw new NewsroomError("The newsroom filed an unreadable story. Try again.");
   }
   return { result: parsed.data, refused: false };
+}
+
+/** The human-readable message from an Anthropic API error body. */
+function apiMessage(error: InstanceType<typeof Anthropic.APIError>): string {
+  const body = error.error as { error?: { message?: string } } | undefined;
+  return body?.error?.message ?? error.message;
+}
+
+/** Turns an API failure into a message the visitor (or site owner) can act on. */
+function describeApiError(error: unknown): Error {
+  if (!(error instanceof Anthropic.APIError)) return error as Error;
+  const message = apiMessage(error);
+  console.error("Claude API error", error.status, message);
+  if (error instanceof Anthropic.AuthenticationError)
+    return new NewsroomError("The newsroom's API key was rejected.");
+  if (error instanceof Anthropic.PermissionDeniedError)
+    return new NewsroomError(`The API key isn't allowed to do this: ${message}`);
+  if (error instanceof Anthropic.RateLimitError)
+    return new NewsroomError("The newsroom is swamped. Try again in a minute.");
+  if (/credit balance/i.test(message))
+    return new NewsroomError(
+      "The newsroom can't pay its bills: the Anthropic account is out of credit. Add credit at console.anthropic.com → Billing.",
+    );
+  if (error instanceof Anthropic.NotFoundError)
+    return new NewsroomError(
+      `The model isn't available to this API key (${message}). Set a CITY_MODEL secret to one it can use.`,
+    );
+  if (error.status && error.status >= 500)
+    return new NewsroomError("Claude is having a moment. Try again shortly.");
+  return new NewsroomError(
+    `The newsroom's printing press jammed (${error.status ?? "error"}): ${message.slice(0, 240)}`,
+  );
 }
