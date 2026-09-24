@@ -146,3 +146,80 @@ describe("share links", () => {
     expect(decodeShare("not-a-real-code")).rejects.toThrow();
   });
 });
+
+describe("Claude output", () => {
+  test("flat output converts, and unknown values fall back safely", async () => {
+    const { fromClaude } = await import("./schema");
+    const r = fromClaude({
+      scale: "citywide",
+      headline: "Whale lands",
+      subhead: "Yes.",
+      quotes: [{ name: "A", role: "B", text: "C" }],
+      stats: { population: -10, happiness: 5, money: 0, pollution: 1, chaos: 20 },
+      tile_ops: [
+        {
+          op: "landmark",
+          target: "Merdeka",
+          count: 1,
+          build: "",
+          landmark_name: "Whale",
+          landmark_shape: "blob",
+          landmark_color: "#445566",
+          landmark_height: 1,
+        },
+        {
+          op: "build",
+          target: "bukit bintang",
+          count: 2,
+          build: "Shop",
+          landmark_name: "",
+          landmark_shape: "",
+          landmark_color: "",
+          landmark_height: 0,
+        },
+        {
+          op: "teleport",
+          target: "x",
+          count: 1,
+          build: "",
+          landmark_name: "",
+          landmark_shape: "",
+          landmark_color: "",
+          landmark_height: 0,
+        },
+      ],
+      ongoing_label: "",
+      ongoing_days: 0,
+      ongoing_per_day: { population: 0, happiness: 0, money: 0, pollution: 0, chaos: 0 },
+      actors: [
+        { kind: "Whale", label: "Blue whale", color: "#4f6f8f", size: 4, count: 1, shape: "blob" },
+        { kind: "dragon", label: "?", color: "red", size: 3, count: 1, shape: "wing" },
+      ],
+      crowd: "Flee",
+      responders: ["fire", "coastguard"],
+      followups: [{ delay_days: 2, note: "Satay stalls.", stats: {}, tile_ops: [] }],
+    });
+    expect(r.success).toBe(true);
+    if (!r.success) return;
+    expect(r.data.tile_ops).toHaveLength(2);
+    expect(r.data.tile_ops[0].target).toBe("merdeka");
+    expect(r.data.tile_ops[0].landmark?.name).toBe("Whale");
+    expect(r.data.tile_ops[1]).toMatchObject({
+      target: "bukit_bintang",
+      build_kind: "shop",
+      landmark: null,
+    });
+    expect(r.data.ongoing).toBeNull();
+    expect(r.data.spectacle.actors.map((a) => a.kind)).toEqual(["whale"]);
+    expect(r.data.spectacle.crowd).toBe("flee");
+    expect(r.data.spectacle.responders).toEqual(["fire"]);
+    expect(r.data.followups[0].stat_changes.happiness).toBe(0);
+  });
+
+  test("schema sent to Claude stays small", async () => {
+    const { claudeOutputJsonSchema } = await import("./schema");
+    const json = JSON.stringify(claudeOutputJsonSchema);
+    expect(json.length).toBeLessThan(4000);
+    expect((json.match(/"enum"/g) ?? []).length).toBeLessThanOrEqual(3);
+  });
+});

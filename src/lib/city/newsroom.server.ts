@@ -1,5 +1,10 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { eventResultJsonSchema, eventResultSchema, type SimulateInput } from "./schema";
+import {
+  CLAUDE_OUTPUT_EXAMPLE,
+  claudeOutputJsonSchema,
+  fromClaude,
+  type SimulateInput,
+} from "./schema";
 import type { EventResult } from "./types";
 
 // Override with the CITY_MODEL secret if you want a cheaper/faster model.
@@ -21,6 +26,13 @@ spectacle: what visitors watch in 3D before and after impact. Pick 1-3 actors th
 followups: 0-3 chain reactions that play out over the next 1-10 days, each with a one-sentence bulletin note written in the paper's voice and its own stat_changes and tile_ops (for example, day 2: the whale attracts tourists and hawker stalls open nearby; day 5: the smell reaches Chinatown). Make them follow plausibly from the event and from each other.
 
 ongoing: an optional lingering effect with small per-day deltas. Otherwise null.
+
+Output fields (plain strings must use exactly these values):
+- tile_ops[].target: a district id above, or center, edge, river, random, residential, commercial, towers, parks, forest, roads, empty, landmarks.
+- tile_ops[].build: house, shop, tower, park, road or forest for build ops, otherwise "". The landmark_* fields are only used by landmark ops (shape: tower, dome, pyramid, statue, crater, blob, spire, arch, twin_towers, needle, supertall, mosque, colonial); otherwise leave them empty or 0.
+- actors[].kind: one of the actor kinds above; actors[].shape: sphere, box, cone, spiky, ring or blob; colours are hex like #4f6f8f.
+- crowd: flee, gather, celebrate or ignore. responders: any of fire, police, ambulance, army, cleanup.
+- stats and per-day stats are deltas. For no ongoing effect use ongoing_label "" and ongoing_days 0.
 
 Voice: a deadpan local Malaysian newspaper covering absurd news with a straight face. The headline is under 12 words, in sentence case, dry and specific. The subhead is one sentence of understated detail. Write 1-3 quotes from invented residents or officials with plausible Malaysian names (Malay, Chinese, Indian and others) and oddly specific roles (a mamak stall owner, a Rapid KL bus captain, a DBKL officer), reacting in character; a little light Manglish is welcome. The humour comes from bureaucratic calm in the face of nonsense, never from cruelty or stereotypes.
 
@@ -73,31 +85,46 @@ Recent headlines: ${city.recentHeadlines.length ? city.recentHeadlines.map((h) =
 The visitor typed this event:
 <event>${event}</event>`;
 
-  const params = {
+  const base = {
     model: process.env.CITY_MODEL || DEFAULT_MODEL,
     max_tokens: 8000,
-    output_config: {
-      effort: "low" as const,
-      format: { type: "json_schema" as const, schema: eventResultJsonSchema },
-    },
     system: SYSTEM_PROMPT,
     messages: [{ role: "user" as const, content: userMessage }],
+  };
+  const structured = {
+    ...base,
+    output_config: {
+      effort: "low" as const,
+      format: { type: "json_schema" as const, schema: claudeOutputJsonSchema },
+    },
+  };
+  // Without structured outputs: same request, JSON shape described in words.
+  const plain = {
+    ...base,
+    output_config: { effort: "low" as const },
+    system: `${SYSTEM_PROMPT}\n\nReply with only a JSON object (no prose, no code fence) in exactly this shape:\n${CLAUDE_OUTPUT_EXAMPLE}`,
   };
 
   let response: Anthropic.Beta.BetaMessage;
   try {
-    // Refusal fallbacks are a beta; if the request is rejected (e.g. the beta
-    // isn't enabled for this account), retry once as a plain request.
+    // Try the richest request first, then step down if the API rejects a
+    // feature: refusal fallbacks (beta), then structured outputs.
     try {
       response = await client.beta.messages.create({
-        ...params,
+        ...structured,
         betas: ["server-side-fallback-2026-07-01"],
         fallbacks: "default",
       });
     } catch (error) {
       if (!(error instanceof Anthropic.BadRequestError)) throw error;
       console.warn("Retrying without refusal fallbacks:", apiMessage(error));
-      response = await client.beta.messages.create(params);
+      try {
+        response = await client.beta.messages.create(structured);
+      } catch (error2) {
+        if (!(error2 instanceof Anthropic.BadRequestError)) throw error2;
+        console.warn("Retrying without structured outputs:", apiMessage(error2));
+        response = await client.beta.messages.create(plain);
+      }
     }
   } catch (error) {
     throw describeApiError(error);
@@ -112,11 +139,13 @@ The visitor typed this event:
 
   let json: unknown;
   try {
-    json = JSON.parse(text.text);
+    // Structured output is pure JSON; the plain fallback may wrap it in prose.
+    const t = text.text;
+    json = JSON.parse(t.slice(t.indexOf("{"), t.lastIndexOf("}") + 1));
   } catch {
     throw new NewsroomError("The newsroom filed an unreadable story. Try again.");
   }
-  const parsed = eventResultSchema.safeParse(json);
+  const parsed = fromClaude(json);
   if (!parsed.success) {
     console.error("Unexpected newsroom output", parsed.error.flatten());
     throw new NewsroomError("The newsroom filed an unreadable story. Try again.");
