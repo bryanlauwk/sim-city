@@ -196,6 +196,12 @@ export interface Actor {
   /** For swarms, convoys and rain: how many. */
   count: number;
   shape: ActorShape;
+  /** Library key for a generated 3D model of this actor ("" for built-ins). */
+  model_key?: string;
+  /** Description sent to the 3D generator when the model doesn't exist yet. */
+  model_prompt?: string;
+  /** Public URL of the generated model once it's ready. */
+  model_url?: string;
 }
 
 export interface Spectacle {

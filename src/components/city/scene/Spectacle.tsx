@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef } from "react";
+import { Suspense, useEffect, useMemo, useRef } from "react";
+import { useGLTF } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { Actor, ActorKind, ActorShape, CrowdReaction, Responder } from "@/lib/city/types";
@@ -23,6 +24,8 @@ export interface SpectacleRun {
   responders: Responder[];
   focus: { x: number; z: number };
   radius: number;
+  /** An encore for a model that just finished generating. */
+  fresh?: boolean;
 }
 
 /** Seconds after start when each kind of actor makes contact. */
@@ -657,6 +660,92 @@ function ImpactBurst({
 }
 
 // ---------------------------------------------------------------------------
+// Generated actors: a Meshy model from the shared library, dressed in the
+// city's flat-shaded style and moved like its built-in stand-in.
+// ---------------------------------------------------------------------------
+
+const WALKERS = new Set<ActorKind>(["kaiju", "creature", "tapir", "monitor_lizard", "lion_dance"]);
+const FLYERS = new Set<ActorKind>([
+  "ufo",
+  "hornbill",
+  "hot_air_balloon",
+  "swarm",
+  "storm",
+  "fireworks",
+]);
+
+function GeneratedMesh({ url, color }: { url: string; color: string }) {
+  const { scene } = useGLTF(url);
+  const object = useMemo(() => {
+    const o = scene.clone(true);
+    const mat = new THREE.MeshStandardMaterial({ color, flatShading: true, roughness: 0.7 });
+    o.traverse((c) => {
+      const m = c as THREE.Mesh;
+      if (!m.isMesh) return;
+      m.material = mat;
+      m.castShadow = true;
+    });
+    // Normalise to a unit footprint, resting on the ground.
+    const box = new THREE.Box3().setFromObject(o);
+    const size = box.getSize(new THREE.Vector3());
+    const k = 1.2 / Math.max(size.x, size.y, size.z, 0.001);
+    const centre = box.getCenter(new THREE.Vector3());
+    o.scale.setScalar(k);
+    o.position.set(-centre.x * k, -box.min.y * k, -centre.z * k);
+    return o;
+  }, [scene, color]);
+  return <primitive object={object} />;
+}
+
+/** Sparkles to announce a model fresh from the studio. */
+function StudioSparkle({ getT }: { getT: () => number }) {
+  const ref = useRef<THREE.Group>(null);
+  useFrame(() => {
+    const t = getT();
+    ref.current?.children.forEach((c, i) => {
+      const a = t * 2 + (i / 10) * Math.PI * 2;
+      c.position.set(Math.cos(a) * 1.1, 0.3 + ((t * 0.8 + i * 0.13) % 1.6), Math.sin(a) * 1.1);
+      c.visible = t < 6;
+    });
+  });
+  return (
+    <group ref={ref}>
+      {Array.from({ length: 10 }, (_, i) => (
+        <mesh key={i}>
+          <octahedronGeometry args={[0.06, 0]} />
+          <meshBasicMaterial color="#fff27a" />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function Hover({ a, focus, getT, impact, children }: ActorProps & { children: React.ReactNode }) {
+  const ref = useRef<THREE.Group>(null);
+  const s = 0.5 + a.size * 0.3;
+  useFrame(() => {
+    const t = getT();
+    const g = ref.current;
+    if (!g) return;
+    const y = t < impact ? 14 - (14 - 3) * ease(t / impact) : 3 + Math.sin(t * 1.5) * 0.25;
+    g.position.set(focus.x, y, focus.z);
+    g.rotation.y = t * 0.4;
+    g.scale.setScalar(s);
+  });
+  return <group ref={ref}>{children}</group>;
+}
+
+function GeneratedActor(p: ActorProps & { fresh: boolean }) {
+  const body = (
+    <Suspense fallback={null}>
+      <GeneratedMesh url={p.a.model_url!} color={p.a.color} />
+      {p.fresh && <StudioSparkle getT={p.getT} />}
+    </Suspense>
+  );
+  if (WALKERS.has(p.a.kind)) return <Stomper {...p}>{body}</Stomper>;
+  if (FLYERS.has(p.a.kind)) return <Hover {...p}>{body}</Hover>;
+  return <Faller {...p}>{body}</Faller>;
+}
 
 const HITS_GROUND = new Set<ActorKind>([
   "tapir",
@@ -757,6 +846,7 @@ export function SpectacleView({
           bus,
           seed: run.id * 31 + i,
         };
+        if (a.model_url) return <GeneratedActor key={i} {...p} fresh={!!run.fresh} />;
         switch (a.kind) {
           case "whale":
             return <Whale key={i} {...p} />;

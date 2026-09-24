@@ -49,6 +49,26 @@ Events need an Anthropic API key, which stays on the server (a TanStack Start se
 
 Without a key the game still runs, but typed events show a "newsroom is closed" message.
 
+## Optional: new actors on demand (Meshy + Supabase)
+
+When an event names something the built-in library can't show ("a giant teh tarik"), Claude picks a stand-in actor and also names a `model_key` and a `model_prompt`. The server then:
+
+1. **Looks it up** in a shared Supabase library. If the model is ready, every player gets it instantly.
+2. **Generates it if it's new**, within the caps: it starts a Meshy text-to-3D task (an untextured low-poly preview, which the game colours in its own style) while the event plays with the stand-in.
+3. **Keeps it for everyone.** The client polls while the model is sculpted. When Meshy finishes, the GLB is copied into Supabase Storage (Meshy's links expire) and swaps into the scene with a "fresh from the studio" flourish.
+
+Setup:
+
+1. Create a Meshy account and API key at [meshy.ai](https://www.meshy.ai), with credits.
+2. In a Supabase project, run [`supabase/actor_library.sql`](supabase/actor_library.sql) in the SQL editor. It creates the `actor_library` table and a public `actors` storage bucket.
+3. Add these secrets (Lovable → Secrets):
+   - `MESHY_API_KEY`
+   - `SUPABASE_URL`
+   - `SUPABASE_SERVICE_ROLE_KEY` (server-only)
+   - optionally `MESHY_DAILY_CAP` (default 20 new models a day) and `MESHY_PER_VISITOR_CAP` (default 2 per visitor a day)
+
+Without these secrets, custom actors fall back to their built-in stand-ins.
+
 ## Code map
 
 | Path | What it does |
@@ -57,7 +77,8 @@ Without a key the game still runs, but typed events show a "newsroom is closed" 
 | `src/lib/city/simulation.ts` | Deterministic sim: growth, sprawl, redevelopment, events, chain reactions, replay |
 | `src/lib/city/schema.ts` | Zod validation and clamping of event results, plus the JSON schema sent to Claude |
 | `src/lib/city/newsroom.server.ts` | Server-only Claude call (structured output, refusal fallback) |
-| `src/lib/city/simulate.functions.ts` | Server function the page calls, with a per-IP throttle |
+| `src/lib/city/simulate.functions.ts` | Server functions the page calls (events, studio polling), with per-IP throttles |
+| `src/lib/city/actorLibrary.server.ts` | Shared generated-actor library: Supabase lookups, caps, Meshy tasks, re-hosting |
 | `src/lib/city/persistence.ts` | localStorage save, credits, share-link encoding |
 | `src/components/city/CityScene.tsx` | three.js / react-three-fiber scene and camera director |
 | `src/components/city/scene/*` | Instanced buildings, ground and trees, rail, street life, sky and weather, event spectacles |

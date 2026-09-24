@@ -218,10 +218,52 @@ describe("Claude output", () => {
     expect(r.data.followups[0].stat_changes.happiness).toBe(0);
   });
 
+  test("custom model keys are normalised into slugs", async () => {
+    const { fromClaude } = await import("./schema");
+    const r = fromClaude({
+      scale: "minor",
+      headline: "Teh tarik",
+      subhead: "",
+      quotes: [],
+      stats: {},
+      tile_ops: [],
+      actors: [
+        {
+          kind: "giant_object",
+          label: "Teh tarik",
+          color: "#c8894a",
+          size: 4,
+          count: 1,
+          shape: "cone",
+          model_key: "Teh Tarik  Glass!!",
+          model_prompt: "a tall glass of teh tarik",
+        },
+        {
+          kind: "whale",
+          label: "Whale",
+          color: "#445566",
+          size: 4,
+          count: 1,
+          shape: "blob",
+          model_key: "",
+          model_prompt: "",
+        },
+      ],
+      crowd: "gather",
+      responders: [],
+      followups: [],
+    });
+    expect(r.success).toBe(true);
+    if (!r.success) return;
+    expect(r.data.spectacle.actors[0].model_key).toBe("teh-tarik-glass");
+    expect(r.data.spectacle.actors[0].model_prompt).toBe("a tall glass of teh tarik");
+    expect(r.data.spectacle.actors[1].model_key).toBeUndefined();
+  });
+
   test("schema sent to Claude stays small", async () => {
     const { claudeOutputJsonSchema } = await import("./schema");
     const json = JSON.stringify(claudeOutputJsonSchema);
-    expect(json.length).toBeLessThan(4000);
+    expect(json.length).toBeLessThan(4200);
     expect((json.match(/"enum"/g) ?? []).length).toBeLessThanOrEqual(3);
   });
 });

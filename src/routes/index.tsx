@@ -40,8 +40,14 @@ import {
 import { districtAt, DISTRICTS } from "@/lib/city/kl";
 import type { SimClock, SpectacleRun } from "@/components/city/CityScene";
 import { hourOf } from "@/components/city/scene/common";
-import { simulateEvent } from "@/lib/city/simulate.functions";
-import { GRID_SIZE, SCALE_COST, type CityState, type EventResult } from "@/lib/city/types";
+import { pollActor, simulateEvent } from "@/lib/city/simulate.functions";
+import {
+  GRID_SIZE,
+  SCALE_COST,
+  type Actor,
+  type CityState,
+  type EventResult,
+} from "@/lib/city/types";
 import { cn } from "@/lib/utils";
 
 const CityScene = lazy(() => import("@/components/city/CityScene"));
@@ -239,6 +245,60 @@ function Index() {
     seenBulletins.current = n;
   }, [city]);
 
+  // Generated actors: poll the studio, then give the new model an encore.
+  const polling = useRef(new Set<string>());
+  const runRef = useRef<SpectacleRun | null>(null);
+  runRef.current = run;
+  const watchStudio = useCallback(
+    (actor: Actor, focus: { x: number; z: number }, radius: number) => {
+      const key = actor.model_key;
+      if (!key || actor.model_url || polling.current.has(key)) return;
+      polling.current.add(key);
+      toast(`The studio is sculpting ${actor.label || "something new"}…`, {
+        description: "A stand-in is filling in for now.",
+        duration: 6000,
+      });
+      const started = Date.now();
+      const tick = async () => {
+        let res: Awaited<ReturnType<typeof pollActor>>;
+        try {
+          res = await pollActor({ data: { key } });
+        } catch {
+          res = { status: "pending" };
+        }
+        if (res.status === "ready") {
+          polling.current.delete(key);
+          toast.success(`Fresh from the studio: ${actor.label || key}`, {
+            description: "Saved to the library for everyone.",
+          });
+          const ready: Actor = { ...actor, model_url: res.url };
+          const cur = runRef.current;
+          if (cur && cur.actors.some((a) => a.model_key === key)) {
+            setRun({ ...cur, actors: cur.actors.map((a) => (a.model_key === key ? ready : a)) });
+          } else if (!cur) {
+            setRun({
+              id: ++runId.current,
+              actors: [ready],
+              crowd: "gather",
+              responders: [],
+              focus,
+              radius,
+              fresh: true,
+            });
+          }
+          return;
+        }
+        if (res.status !== "pending" || Date.now() - started > 4 * 60_000) {
+          polling.current.delete(key);
+          return;
+        }
+        setTimeout(tick, 6000);
+      };
+      setTimeout(tick, 8000);
+    },
+    [],
+  );
+
   const commit = useCallback((id: number) => {
     const p = pending.current;
     if (!p || p.id !== id) return;
@@ -341,6 +401,8 @@ function Index() {
       });
       // If the 3D scene isn't running (e.g. no WebGL), don't wait for it.
       setTimeout(() => commit(id), 7000);
+      for (const a of result.spectacle.actors)
+        watchStudio(a, { x: focus.x, z: focus.z }, focus.radius);
     } catch (error) {
       console.error(error);
       toast.error("Couldn't reach the newsroom. Check your connection and try again.");

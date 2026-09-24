@@ -61,6 +61,24 @@ const spectacle = z
           size: clampNum(1, 8),
           count: clampNum(1, 60),
           shape: z.enum(ACTOR_SHAPES).catch("blob"),
+          model_key: z
+            .string()
+            .transform((v) =>
+              v
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, "-")
+                .replace(/^-+|-+$/g, "")
+                .slice(0, 48),
+            )
+            .optional()
+            .catch(undefined),
+          model_prompt: text(300).optional().catch(undefined),
+          model_url: z
+            .string()
+            .regex(/^https:\/\//)
+            .max(500)
+            .optional()
+            .catch(undefined),
         }),
       )
       .transform((a) => a.slice(0, 3)),
@@ -197,8 +215,10 @@ export const claudeOutputJsonSchema = {
           size: { type: "integer" },
           count: { type: "integer" },
           shape: { type: "string" },
+          model_key: { type: "string" },
+          model_prompt: { type: "string" },
         },
-        required: ["kind", "label", "color", "size", "count", "shape"],
+        required: ["kind", "label", "color", "size", "count", "shape", "model_key", "model_prompt"],
         additionalProperties: false,
       },
     },
@@ -238,7 +258,7 @@ export const claudeOutputJsonSchema = {
 } as const;
 
 /** A plain-text description of the same shape, for requests without structured outputs. */
-export const CLAUDE_OUTPUT_EXAMPLE = `{"scale":"minor|citywide|apocalyptic","headline":"","subhead":"","quotes":[{"name":"","role":"","text":""}],"stats":{"population":0,"happiness":0,"money":0,"pollution":0,"chaos":0},"tile_ops":[{"op":"destroy|burn|flood|build|landmark|clear","target":"","count":1,"build":"","landmark_name":"","landmark_shape":"","landmark_color":"#rrggbb","landmark_height":1}],"ongoing_label":"","ongoing_days":0,"ongoing_per_day":{"population":0,"happiness":0,"money":0,"pollution":0,"chaos":0},"actors":[{"kind":"","label":"","color":"#rrggbb","size":1,"count":1,"shape":""}],"crowd":"flee|gather|celebrate|ignore","responders":[""],"followups":[{"delay_days":1,"note":"","stats":{"population":0,"happiness":0,"money":0,"pollution":0,"chaos":0},"tile_ops":[{"op":"build","target":"","count":1,"build":""}]}]}`;
+export const CLAUDE_OUTPUT_EXAMPLE = `{"scale":"minor|citywide|apocalyptic","headline":"","subhead":"","quotes":[{"name":"","role":"","text":""}],"stats":{"population":0,"happiness":0,"money":0,"pollution":0,"chaos":0},"tile_ops":[{"op":"destroy|burn|flood|build|landmark|clear","target":"","count":1,"build":"","landmark_name":"","landmark_shape":"","landmark_color":"#rrggbb","landmark_height":1}],"ongoing_label":"","ongoing_days":0,"ongoing_per_day":{"population":0,"happiness":0,"money":0,"pollution":0,"chaos":0},"actors":[{"kind":"","label":"","color":"#rrggbb","size":1,"count":1,"shape":"","model_key":"","model_prompt":""}],"crowd":"flee|gather|celebrate|ignore","responders":[""],"followups":[{"delay_days":1,"note":"","stats":{"population":0,"happiness":0,"money":0,"pollution":0,"chaos":0},"tile_ops":[{"op":"build","target":"","count":1,"build":""}]}]}`;
 
 const norm = (v: unknown) =>
   String(v ?? "")
@@ -317,6 +337,9 @@ export function fromClaude(raw: unknown) {
                 size: Number(x.size) || 3,
                 count: Number(x.count) || 1,
                 shape: oneOf(ACTOR_SHAPES, x.shape) ?? "blob",
+                ...(x.model_key
+                  ? { model_key: String(x.model_key), model_prompt: String(x.model_prompt ?? "") }
+                  : {}),
               }
             : null;
         })

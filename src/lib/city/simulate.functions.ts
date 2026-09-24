@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
 import { simulateInputSchema } from "./schema";
 import type { EventResult } from "./types";
 
@@ -13,31 +14,63 @@ const WINDOW_MS = 60_000;
 const MAX_PER_WINDOW = 8;
 const hits = new Map<string, number[]>();
 
-function throttled(ip: string): boolean {
+function throttled(ip: string, bucket = hits, max = MAX_PER_WINDOW): boolean {
   const now = Date.now();
-  const recent = (hits.get(ip) ?? []).filter((t) => now - t < WINDOW_MS);
+  const recent = (bucket.get(ip) ?? []).filter((t) => now - t < WINDOW_MS);
   recent.push(now);
-  hits.set(ip, recent);
-  if (hits.size > 5000) hits.clear();
-  return recent.length > MAX_PER_WINDOW;
+  bucket.set(ip, recent);
+  if (bucket.size > 5000) bucket.clear();
+  return recent.length > max;
+}
+
+async function requestIp() {
+  const { getRequestHeader } = await import("@tanstack/react-start/server");
+  return getRequestHeader("cf-connecting-ip") ?? getRequestHeader("x-forwarded-for") ?? "local";
 }
 
 export const simulateEvent = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => simulateInputSchema.parse(data))
   .handler(async ({ data }): Promise<SimulateResponse> => {
-    const { getRequestHeader } = await import("@tanstack/react-start/server");
-    const ip =
-      getRequestHeader("cf-connecting-ip") ?? getRequestHeader("x-forwarded-for") ?? "local";
+    const ip = await requestIp();
     if (throttled(ip))
       return { ok: false, error: "Slow down, the presses are still warm. Try again in a minute." };
 
     const { runNewsroom, NewsroomError } = await import("./newsroom.server");
     try {
       const { result, refused } = await runNewsroom(data);
+      // Attach generated models, or start generating new ones (see actorLibrary.server).
+      const { resolveCustomActors } = await import("./actorLibrary.server");
+      result.spectacle.actors = await resolveCustomActors(result.spectacle.actors, ip);
       return { ok: true, result, refused };
     } catch (error) {
       if (error instanceof NewsroomError) return { ok: false, error: error.message };
       console.error(error);
       return { ok: false, error: "Something went wrong in the newsroom." };
+    }
+  });
+
+const pollHits = new Map<string, number[]>();
+
+export type PollActorResponse =
+  | { status: "ready"; url: string }
+  | { status: "pending" | "failed" | "unavailable" };
+
+/** Clients poll this while a generated actor is being sculpted. */
+export const pollActor = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) =>
+    z.object({ key: z.string().regex(/^[a-z0-9-]{1,48}$/) }).parse(data),
+  )
+  .handler(async ({ data }): Promise<PollActorResponse> => {
+    const ip = await requestIp();
+    if (throttled(ip, pollHits, 30)) return { status: "pending" };
+    const { pollCustomActor } = await import("./actorLibrary.server");
+    try {
+      const r = await pollCustomActor(data.key);
+      return r.status === "ready" && r.url
+        ? { status: "ready", url: r.url }
+        : { status: r.status === "ready" ? "pending" : r.status };
+    } catch (error) {
+      console.error("Actor poll failed", error);
+      return { status: "pending" };
     }
   });
