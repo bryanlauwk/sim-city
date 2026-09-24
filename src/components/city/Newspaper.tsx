@@ -15,6 +15,14 @@ function Story({
   pending: number;
 }) {
   const r = ev.result;
+  // Credit every ready-made model once, linked to its page when known.
+  const credits = [
+    ...new Map(
+      r.spectacle.actors
+        .filter((a): a is typeof a & { attribution: string } => !!a.attribution)
+        .map((a) => [a.attribution, a.attribution_url] as const),
+    ),
+  ];
   return (
     <article className={cn("border-b border-ink/20 pb-4", lead ? "pt-1" : "pt-3")}>
       <div className="mb-1 flex items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
@@ -51,6 +59,23 @@ function Story({
             </blockquote>
           ))}
         </div>
+      )}
+      {credits.length > 0 && (
+        <p className="mt-2 text-[10px] leading-snug text-muted-foreground">
+          3D model{credits.length > 1 ? "s" : ""}:{" "}
+          {credits.map(([text, url], i) => (
+            <span key={text}>
+              {i > 0 && " · "}
+              {url ? (
+                <a href={url} target="_blank" rel="noreferrer" className="underline">
+                  {text}
+                </a>
+              ) : (
+                text
+              )}
+            </span>
+          ))}
+        </p>
       )}
       {updates.length > 0 && (
         <ul className="mt-3 space-y-1.5 border-t border-dashed border-ink/30 pt-2">

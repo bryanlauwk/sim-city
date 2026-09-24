@@ -10,7 +10,7 @@ import type { EventResult } from "./types";
 // Override with the CITY_MODEL secret if you want a cheaper/faster model.
 const DEFAULT_MODEL = "claude-opus-5";
 
-const SYSTEM_PROMPT = `You are the physics engine, the special-effects director and the newsroom of "Type-a-Disaster", a living low-poly simulation of Kuala Lumpur. Visitors type an event; you decide what it does to the city, choreograph what people see happen on screen, and write how the local paper reports it.
+const SYSTEM_PROMPT = `You are the physics engine, the special-effects director and the newsroom of "Type-a-Disaster", a living 3D simulation of Kuala Lumpur. Visitors type an event; you decide what it does to the city, choreograph what people see happen on screen, and write how the local paper reports it.
 
 The city:
 - A 32x32 tile map of Kuala Lumpur's Golden Triangle, about 66 m per tile, laid out like the real streets. District ids you can target: bukit_bintang (the Jalan Bukit Bintang / Jalan Sultan Ismail scramble crossing, Pavilion KL, Lot 10, Starhill, Fahrenheit88, Sungei Wang Plaza, BB Plaza), jalan_alor (hawker food street), changkat (Changkat Bukit Bintang bars), klcc (Petronas Twin Towers, Suria KLCC, KLCC Park with Lake Symphony, Menara Maxis, Four Seasons, Ilham Tower, Convention Centre), raja_chulan (office towers along Jalan Raja Chulan), trx (The Exchange 106 and TRX park), imbi (Berjaya Times Square), pudu (old shophouses; Merdeka 118 rises at the south-west corner), bukit_nanas (forest reserve under Menara KL), dang_wangi (towards Kampung Baru), ampang (Jalan Ampang, embassies), outskirts. The Monorail runs along Jalan Sultan Ismail, the LRT along Jalan Ampang, the MRT under Bukit Bintang, and a covered walkway links Pavilion to KLCC. Main roads: Jalan Bukit Bintang, Sultan Ismail, Ampang, Raja Chulan, P. Ramlee, Pinang, Kia Peng, Imbi, Pudu, Tun Razak.
@@ -27,7 +27,11 @@ spectacle: what visitors watch in 3D before and after impact. Pick 1-3 actors th
 - Local wildlife: tapir, hornbill, monitor_lizard (giant biawak), durian (a giant durian that falls and splits open).
 - Festivals and street life: lion_dance (with firecrackers), procession (Thaipusam devotees with kavadi behind a silver chariot), parade (Merdeka Day with flags), festive_lights (lantern strings; red for Chinese New Year, green/gold for Hari Raya, via the colour), hot_air_balloon.
 - Urban mishaps: haze (the air thickens citywide for a while), sinkhole (the road caves in), landslide (mud slides down a slope), blackout (a substation blows and the lights go out), lrt_breakdown (trains halt, smoke rises).
-Give each actor a short label, a fitting hex colour and a size 1-8 (a whale is about 4, a kaiju 6). If the event's main subject is a specific thing the library can't show (a giant teh tarik, a Proton Saga, a roti canai, a Hello Kitty balloon), still pick the closest built-in kind as a stand-in (giant_object for objects, creature or kaiju for beasts, ufo or hot_air_balloon for things that fly, swarm for many small things) and also set model_key to a short lowercase noun phrase naming it (e.g. "teh-tarik-glass") and model_prompt to a one-sentence description for a 3D model generator (a single object, e.g. "a tall glass of frothy teh tarik with a straw"). A 3D model will be generated and reused for everyone. Leave model_key and model_prompt empty for built-in actors. crowd is how people on the street react: flee, gather (gawk), celebrate or ignore. responders are the services that rush in: fire, police, ambulance, army, cleanup. Use an empty actors list for quiet policy news.
+Give each actor a short label, a fitting hex colour and a size 1-8 (a whale is about 4, a kaiju 6). If the event's main subject is a specific thing the library can't show (a giant teh tarik, a Proton Saga, a roti canai, a Hello Kitty balloon), still pick the closest built-in kind as a stand-in (giant_object for objects, creature or kaiju for beasts, ufo or hot_air_balloon for things that fly, swarm for many small things) and also give it a custom model:
+  - model_key: a short lowercase noun phrase naming the thing (e.g. "teh-tarik-glass"). If the shared library below already has a fitting key, reuse it exactly and leave parts [] (its saved design is used).
+  - search_terms: the thing's everyday English name, as a realistic 3D model of it would be titled: 1-3 words with the main noun last (e.g. "durian", "blue whale", "double decker bus", "glass of tea"). It is looked up in a free library of about 47,000 realistic and scanned 3D models, so name the physical object, vehicle, animal or food itself, generically if the exact thing is unlikely to exist ("saloon car" for a Proton Saga). Use "" for performances, weather, crowds or anything abstract.
+  - motion and parts: your own design of it, shown at once as a stand-in while a ready-made model loads, and used alone when none is found. Build it from 10-40 primitives (box, sphere, cylinder, cone, torus, capsule). Model units: about 2 tall, standing on y = 0 with y up, centred on x = 0 and z = 0, facing +z. x, y, z are each part's centre; sx, sy, sz its size along each axis (diameter for round shapes); rx, ry, rz its rotation in degrees; color a hex colour. Make it instantly recognisable from above: strong silhouette, a few bold colours, the tell-tale details (the froth on the teh tarik, the Proton badge, the roti's folds). motion: fall (drops from the sky), walk (strides through the streets), hover (floats and bobs) or spin (falls while spinning).
+Leave model_key and search_terms "" and parts [] for built-in actors. crowd is how people on the street react: flee, gather (gawk), celebrate or ignore. responders are the services that rush in: fire, police, ambulance, army, cleanup. Use an empty actors list for quiet policy news.
 
 followups: 0-3 chain reactions that play out over the next 1-10 days, each with a one-sentence bulletin note written in the paper's voice and its own stat_changes and tile_ops (for example, day 2: the whale attracts tourists and Jalan Alor hawkers set up next to it; day 5: the smell reaches the Changkat bars). Make them follow plausibly from the event and from each other.
 
@@ -66,6 +70,7 @@ export class NewsroomError extends Error {}
 
 export async function runNewsroom(
   input: SimulateInput,
+  library: { key: string; name: string }[] = [],
 ): Promise<{ result: EventResult; refused: boolean }> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey)
@@ -87,6 +92,7 @@ Nature score: ${city.nature}/100
 Tiles: ${JSON.stringify(city.tiles)}
 Buildings per district: ${JSON.stringify(city.districts)}
 Recent headlines: ${city.recentHeadlines.length ? city.recentHeadlines.map((h) => `"${h}"`).join("; ") : "none yet"}
+Shared library of custom models (key: name): ${library.length ? library.map((e) => `${e.key}: ${e.name}`).join("; ") : "empty so far"}
 
 The visitor typed this event:
 <event>${event}</event>`;

@@ -290,7 +290,49 @@ describe("Claude output", () => {
           count: 1,
           shape: "cone",
           model_key: "Teh Tarik  Glass!!",
-          model_prompt: "a tall glass of teh tarik",
+          search_terms: "glass drink",
+          motion: "levitate",
+          parts: [
+            {
+              shape: "cylinder",
+              x: 0,
+              y: 0.8,
+              z: 0,
+              sx: 0.8,
+              sy: 1.6,
+              sz: 0.8,
+              rx: 0,
+              ry: 0,
+              rz: 0,
+              color: "#c8894a",
+            },
+            {
+              shape: "sphere",
+              x: 9,
+              y: 1.7,
+              z: 0,
+              sx: 0.8,
+              sy: 0.3,
+              sz: 0.8,
+              rx: 0,
+              ry: 0,
+              rz: 900,
+              color: "froth",
+            },
+            {
+              shape: "teapot",
+              x: 0,
+              y: 0,
+              z: 0,
+              sx: 1,
+              sy: 1,
+              sz: 1,
+              rx: 0,
+              ry: 0,
+              rz: 0,
+              color: "#ffffff",
+            },
+          ],
         },
         {
           kind: "whale",
@@ -300,7 +342,9 @@ describe("Claude output", () => {
           count: 1,
           shape: "blob",
           model_key: "",
-          model_prompt: "",
+          search_terms: "",
+          motion: "fall",
+          parts: [],
         },
       ],
       crowd: "gather",
@@ -310,14 +354,20 @@ describe("Claude output", () => {
     expect(r.success).toBe(true);
     if (!r.success) return;
     expect(r.data.spectacle.actors[0].model_key).toBe("teh-tarik-glass");
-    expect(r.data.spectacle.actors[0].model_prompt).toBe("a tall glass of teh tarik");
+    const tea = r.data.spectacle.actors[0];
+    expect(tea.search_terms).toBe("glass drink");
+    expect(tea.recipe?.motion).toBe("fall");
+    expect(tea.recipe?.parts).toHaveLength(3);
+    expect(tea.recipe?.parts[2].shape).toBe("box");
+    expect(tea.recipe?.parts[1]).toMatchObject({ x: 2, rz: 360 });
+    expect(tea.recipe?.parts[1].color).toMatch(/^#[0-9a-f]{6}$/i);
     expect(r.data.spectacle.actors[1].model_key).toBeUndefined();
   });
 
   test("schema sent to Claude stays small", async () => {
     const { claudeOutputJsonSchema } = await import("./schema");
     const json = JSON.stringify(claudeOutputJsonSchema);
-    expect(json.length).toBeLessThan(4200);
+    expect(json.length).toBeLessThan(5200);
     expect((json.match(/"enum"/g) ?? []).length).toBeLessThanOrEqual(3);
   });
 });

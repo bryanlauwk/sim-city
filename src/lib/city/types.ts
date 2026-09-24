@@ -196,12 +196,46 @@ export interface Actor {
   /** For swarms, convoys and rain: how many. */
   count: number;
   shape: ActorShape;
-  /** Library key for a generated 3D model of this actor ("" for built-ins). */
+  /** Shared-library key for a custom model of this actor (absent for built-ins). */
   model_key?: string;
-  /** Description sent to the 3D generator when the model doesn't exist yet. */
-  model_prompt?: string;
-  /** Public URL of the generated model once it's ready. */
+  /** Keywords to find a ready-made model in the free Objaverse library. */
+  search_terms?: string;
+  /** Claude's own design: the stand-in while a model loads, or when none fits. */
+  recipe?: Recipe;
+  /** A ready-made GLB (an Objaverse model on Hugging Face's CDN). */
   model_url?: string;
+  /** Credit line for the model's author and licence. */
+  attribution?: string;
+  /** Where the credited model lives. */
+  attribution_url?: string;
+  /** True the first time this model enters the shared library. */
+  fresh?: boolean;
+}
+
+export const RECIPE_SHAPES = ["box", "sphere", "cylinder", "cone", "torus", "capsule"] as const;
+export type RecipeShape = (typeof RECIPE_SHAPES)[number];
+
+export const RECIPE_MOTIONS = ["fall", "walk", "hover", "spin"] as const;
+export type RecipeMotion = (typeof RECIPE_MOTIONS)[number];
+
+/** One primitive in a recipe: centre, size and rotation (degrees) in model units. */
+export interface RecipePart {
+  shape: RecipeShape;
+  x: number;
+  y: number;
+  z: number;
+  sx: number;
+  sy: number;
+  sz: number;
+  rx: number;
+  ry: number;
+  rz: number;
+  color: string;
+}
+
+export interface Recipe {
+  motion: RecipeMotion;
+  parts: RecipePart[];
 }
 
 export interface Spectacle {

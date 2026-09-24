@@ -5,6 +5,8 @@ import {
   BUILD_KINDS,
   CROWD_REACTIONS,
   LANDMARK_SHAPES,
+  RECIPE_MOTIONS,
+  RECIPE_SHAPES,
   RESPONDERS,
   TILE_OPS,
   TILE_TARGETS,
@@ -48,6 +50,30 @@ const tileOp = z.object({
   landmark: landmark.nullable().catch(null),
 });
 
+const coord = (lo: number, hi: number) => clampNum(lo, hi).catch(0);
+
+/** A Claude-designed model: up to 40 primitives, clamped to a sane box. */
+export const recipe = z.object({
+  motion: z.enum(RECIPE_MOTIONS).catch("fall"),
+  parts: z
+    .array(
+      z.object({
+        shape: z.enum(RECIPE_SHAPES).catch("box"),
+        x: coord(-2, 2),
+        y: coord(-0.5, 4),
+        z: coord(-2, 2),
+        sx: clampNum(0.02, 3).catch(0.2),
+        sy: clampNum(0.02, 4).catch(0.2),
+        sz: clampNum(0.02, 3).catch(0.2),
+        rx: coord(-360, 360),
+        ry: coord(-360, 360),
+        rz: coord(-360, 360),
+        color: hexColor("#999999"),
+      }),
+    )
+    .transform((p) => p.slice(0, 40)),
+});
+
 const NO_SPECTACLE: Spectacle = { actors: [], crowd: "ignore", responders: [] };
 
 const spectacle = z
@@ -72,13 +98,23 @@ const spectacle = z
             )
             .optional()
             .catch(undefined),
-          model_prompt: text(300).optional().catch(undefined),
+          search_terms: text(60).optional().catch(undefined),
+          recipe: recipe.optional().catch(undefined),
+          // Only the Objaverse mirror: share links are untrusted input.
           model_url: z
             .string()
-            .regex(/^https:\/\//)
-            .max(500)
+            .regex(/^https:\/\/huggingface\.co\/datasets\/allenai\/objaverse\/resolve\//)
+            .max(300)
             .optional()
             .catch(undefined),
+          attribution: text(200).optional().catch(undefined),
+          attribution_url: z
+            .string()
+            .regex(/^https:\/\/sketchfab\.com\//)
+            .max(300)
+            .optional()
+            .catch(undefined),
+          fresh: z.boolean().optional().catch(undefined),
         }),
       )
       .transform((a) => a.slice(0, 3)),
@@ -216,9 +252,42 @@ export const claudeOutputJsonSchema = {
           count: { type: "integer" },
           shape: { type: "string" },
           model_key: { type: "string" },
-          model_prompt: { type: "string" },
+          search_terms: { type: "string" },
+          motion: { type: "string" },
+          parts: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                shape: { type: "string" },
+                x: { type: "number" },
+                y: { type: "number" },
+                z: { type: "number" },
+                sx: { type: "number" },
+                sy: { type: "number" },
+                sz: { type: "number" },
+                rx: { type: "number" },
+                ry: { type: "number" },
+                rz: { type: "number" },
+                color: { type: "string" },
+              },
+              required: ["shape", "x", "y", "z", "sx", "sy", "sz", "rx", "ry", "rz", "color"],
+              additionalProperties: false,
+            },
+          },
         },
-        required: ["kind", "label", "color", "size", "count", "shape", "model_key", "model_prompt"],
+        required: [
+          "kind",
+          "label",
+          "color",
+          "size",
+          "count",
+          "shape",
+          "model_key",
+          "search_terms",
+          "motion",
+          "parts",
+        ],
         additionalProperties: false,
       },
     },
@@ -258,7 +327,7 @@ export const claudeOutputJsonSchema = {
 } as const;
 
 /** A plain-text description of the same shape, for requests without structured outputs. */
-export const CLAUDE_OUTPUT_EXAMPLE = `{"scale":"minor|citywide|apocalyptic","headline":"","subhead":"","quotes":[{"name":"","role":"","text":""}],"stats":{"population":0,"happiness":0,"money":0,"pollution":0,"chaos":0},"tile_ops":[{"op":"destroy|burn|flood|build|landmark|clear","target":"","count":1,"build":"","landmark_name":"","landmark_shape":"","landmark_color":"#rrggbb","landmark_height":1}],"ongoing_label":"","ongoing_days":0,"ongoing_per_day":{"population":0,"happiness":0,"money":0,"pollution":0,"chaos":0},"actors":[{"kind":"","label":"","color":"#rrggbb","size":1,"count":1,"shape":"","model_key":"","model_prompt":""}],"crowd":"flee|gather|celebrate|ignore","responders":[""],"followups":[{"delay_days":1,"note":"","stats":{"population":0,"happiness":0,"money":0,"pollution":0,"chaos":0},"tile_ops":[{"op":"build","target":"","count":1,"build":""}]}]}`;
+export const CLAUDE_OUTPUT_EXAMPLE = `{"scale":"minor|citywide|apocalyptic","headline":"","subhead":"","quotes":[{"name":"","role":"","text":""}],"stats":{"population":0,"happiness":0,"money":0,"pollution":0,"chaos":0},"tile_ops":[{"op":"destroy|burn|flood|build|landmark|clear","target":"","count":1,"build":"","landmark_name":"","landmark_shape":"","landmark_color":"#rrggbb","landmark_height":1}],"ongoing_label":"","ongoing_days":0,"ongoing_per_day":{"population":0,"happiness":0,"money":0,"pollution":0,"chaos":0},"actors":[{"kind":"","label":"","color":"#rrggbb","size":1,"count":1,"shape":"","model_key":"","search_terms":"","motion":"fall|walk|hover|spin","parts":[{"shape":"box|sphere|cylinder|cone|torus|capsule","x":0,"y":0.5,"z":0,"sx":1,"sy":1,"sz":1,"rx":0,"ry":0,"rz":0,"color":"#rrggbb"}]}],"crowd":"flee|gather|celebrate|ignore","responders":[""],"followups":[{"delay_days":1,"note":"","stats":{"population":0,"happiness":0,"money":0,"pollution":0,"chaos":0},"tile_ops":[{"op":"build","target":"","count":1,"build":""}]}]}`;
 
 const norm = (v: unknown) =>
   String(v ?? "")
@@ -338,7 +407,21 @@ export function fromClaude(raw: unknown) {
                 count: Number(x.count) || 1,
                 shape: oneOf(ACTOR_SHAPES, x.shape) ?? "blob",
                 ...(x.model_key
-                  ? { model_key: String(x.model_key), model_prompt: String(x.model_prompt ?? "") }
+                  ? {
+                      model_key: String(x.model_key),
+                      ...(x.search_terms ? { search_terms: String(x.search_terms) } : {}),
+                      ...(arr(x.parts).length
+                        ? {
+                            recipe: {
+                              motion: oneOf(RECIPE_MOTIONS, x.motion) ?? "fall",
+                              parts: arr(x.parts).map((part) => {
+                                const q = obj(part);
+                                return { ...q, shape: oneOf(RECIPE_SHAPES, q.shape) ?? "box" };
+                              }),
+                            },
+                          }
+                        : {}),
+                    }
                   : {}),
               }
             : null;
