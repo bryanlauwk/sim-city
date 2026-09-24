@@ -19,7 +19,8 @@ Events need an Anthropic API key, which stays on the server (a TanStack Start se
    - **Lovable:** Project settings → Secrets.
    - **Wrangler:** `npx wrangler secret put ANTHROPIC_API_KEY`
    - **Local dev:** copy `.dev.vars.example` to `.dev.vars` (it's git-ignored), or export the variable in your shell before running `npm run dev`.
-3. Optional: set `CITY_MODEL` to use a different Claude model. The default is `claude-opus-5`, run at low effort.
+3. If the key is an organization-level key that isn't scoped to a workspace, also add an `ANTHROPIC_WORKSPACE_ID` secret. The workspace ID is under Console → Settings → Workspaces. Alternatively, create the key inside a workspace.
+4. Optional: set `CITY_MODEL` to use a different Claude model. The default is `claude-opus-5`, run at low effort.
 
 Without a key the game still runs, but typed events show a "newsroom is closed" message.
 

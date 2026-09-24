@@ -39,7 +39,14 @@ export async function runNewsroom(
   if (!apiKey)
     throw new NewsroomError("The newsroom is closed: ANTHROPIC_API_KEY is not configured.");
 
-  const client = new Anthropic({ apiKey, maxRetries: 1, timeout: 60_000 });
+  // Organization-level keys (not scoped to a workspace) must name the workspace.
+  const workspaceId = process.env.ANTHROPIC_WORKSPACE_ID;
+  const client = new Anthropic({
+    apiKey,
+    maxRetries: 1,
+    timeout: 60_000,
+    defaultHeaders: workspaceId ? { "anthropic-workspace-id": workspaceId } : undefined,
+  });
   const { city, event } = input;
 
   const userMessage = `City: ${city.name}, day ${city.day}.
@@ -118,6 +125,10 @@ function describeApiError(error: unknown): Error {
     return new NewsroomError(`The API key isn't allowed to do this: ${message}`);
   if (error instanceof Anthropic.RateLimitError)
     return new NewsroomError("The newsroom is swamped. Try again in a minute.");
+  if (/anthropic-workspace-id/i.test(message))
+    return new NewsroomError(
+      "This API key isn't tied to a workspace. Add an ANTHROPIC_WORKSPACE_ID secret (Console → Settings → Workspaces), or use a key created inside a workspace.",
+    );
   if (/credit balance/i.test(message))
     return new NewsroomError(
       "The newsroom can't pay its bills: the Anthropic account is out of credit. Add credit at console.anthropic.com → Billing.",
