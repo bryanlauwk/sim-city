@@ -51,8 +51,8 @@ export function towerParts(tile: number, variant: number, district: DistrictId):
     color: conc,
   };
   const base = 0.36;
-  switch (variant % 6) {
-    case 0: // podium + square glass tower + crown
+  switch (variant % 7) {
+    case 0: // podium, stepped curtain wall, and crown
       return [
         podium,
         {
@@ -62,6 +62,13 @@ export function towerParts(tile: number, variant: number, district: DistrictId):
           size: [0.56, H, 0.56],
           color: glass,
         },
+        ...[0.25, 0.5, 0.75].map((k) => ({
+          geo: "box" as const,
+          mat: "solid" as const,
+          pos: [0, base + H * k, -0.05] as [number, number, number],
+          size: [0.61, 0.035, 0.61] as [number, number, number],
+          color: conc,
+        })),
         {
           geo: "box",
           mat: "solid",
@@ -70,7 +77,7 @@ export function towerParts(tile: number, variant: number, district: DistrictId):
           color: conc,
         },
       ];
-    case 1: // slab block with a coloured roof band
+    case 1: // slab tower with sun-shading fins and a coloured crown band
       return [
         podium,
         {
@@ -87,8 +94,15 @@ export function towerParts(tile: number, variant: number, district: DistrictId):
           size: [0.78, 0.06, 0.42],
           color: pick(SIGNS, r(4)),
         },
+        ...[-0.29, -0.15, 0, 0.15, 0.29].map((x) => ({
+          geo: "box" as const,
+          mat: "solid" as const,
+          pos: [x, base + H / 2, 0.11] as [number, number, number],
+          size: [0.025, H, 0.035] as [number, number, number],
+          color: conc,
+        })),
       ];
-    case 2: // stepped tower with a spire
+    case 2: // stepped tower with a spire and ledges at the setbacks
       return [
         {
           geo: "box",
@@ -96,6 +110,13 @@ export function towerParts(tile: number, variant: number, district: DistrictId):
           pos: [0, (H * 0.62) / 2, 0],
           size: [0.68, H * 0.62, 0.68],
           color: glass,
+        },
+        {
+          geo: "box",
+          mat: "solid",
+          pos: [0, H * 0.62, 0],
+          size: [0.74, 0.045, 0.74],
+          color: conc,
         },
         {
           geo: "box",
@@ -112,7 +133,7 @@ export function towerParts(tile: number, variant: number, district: DistrictId):
           color: "#e8e8e8",
         },
       ];
-    case 3: // round glass tower
+    case 3: // round glass tower with regular pale floor rings
       return [
         podium,
         {
@@ -129,6 +150,13 @@ export function towerParts(tile: number, variant: number, district: DistrictId):
           size: [0.5, 0.1, 0.5],
           color: conc,
         },
+        ...[0.25, 0.5, 0.75].map((k) => ({
+          geo: "cyl" as const,
+          mat: "solid" as const,
+          pos: [0, base + H * k, -0.05] as [number, number, number],
+          size: [0.64, 0.035, 0.64] as [number, number, number],
+          color: conc,
+        })),
       ];
     case 4: // twin slabs joined by a bridge
       return [
@@ -155,8 +183,8 @@ export function towerParts(tile: number, variant: number, district: DistrictId):
           color: conc,
         },
       ];
-    default: {
-      // condominium: pastel concrete with glass bands
+    case 5: {
+      // condominium: pastel balconies, glass rails, and a shaded roof deck
       const c = pick(PASTEL, r(5));
       const parts: KitPart[] = [
         { geo: "box", mat: "solid", pos: [0, H / 2, 0], size: [0.62, H, 0.52], color: c },
@@ -169,24 +197,66 @@ export function towerParts(tile: number, variant: number, district: DistrictId):
           size: [0.64, 0.05, 0.54],
           color: glass,
         });
+      for (let k = 1; k <= 4; k++)
+        parts.push({
+          geo: "box",
+          mat: "accent",
+          pos: [0, (H * k) / 5, 0.29],
+          size: [0.72, 0.035, 0.12],
+          color: pick(SIGNS, r(10 + k)),
+        });
       parts.push({
         geo: "box",
         mat: "solid",
         pos: [0, H + 0.04, 0],
-        size: [0.4, 0.08, 0.3],
+        size: [0.68, 0.08, 0.58],
         color: conc,
       });
       return parts;
     }
+    default: {
+      // stepped office tower with a contrasting mechanical crown
+      return [
+        podium,
+        {
+          geo: "box",
+          mat: "glass",
+          pos: [0, base + H * 0.38, 0],
+          size: [0.72, H * 0.76, 0.7],
+          color: glass,
+        },
+        {
+          geo: "box",
+          mat: "glass",
+          pos: [0.04, base + H * 0.82, 0],
+          size: [0.56, H * 0.18, 0.56],
+          color: glass,
+        },
+        {
+          geo: "box",
+          mat: "accent",
+          pos: [0, base + H * 0.66, 0.36],
+          size: [0.76, 0.045, 0.04],
+          color: pick(SIGNS, r(8)),
+        },
+        {
+          geo: "box",
+          mat: "solid",
+          pos: [0, base + H + 0.04, 0],
+          size: [0.58, 0.08, 0.58],
+          color: conc,
+        },
+      ];
+    }
   }
 }
 
-export function shopParts(tile: number, variant: number): KitPart[] {
+export function shopParts(tile: number, variant: number, district: DistrictId): KitPart[] {
   const r = (k: number) => hash(tile, 200 + k);
   const conc = pick(CONCRETE, r(1));
   const sign = pick(SIGNS, r(2));
   const glass = pick(GLASS, r(3));
-  switch (variant % 4) {
+  switch (variant % 6) {
     case 0: // shopping block: shopfront glass, sign band, awning
       return [
         { geo: "box", mat: "solid", pos: [0, 0.3, -0.02], size: [0.9, 0.6, 0.84], color: conc },
@@ -224,6 +294,52 @@ export function shopParts(tile: number, variant: number): KitPart[] {
         },
         { geo: "box", mat: "glass", pos: [0, 0.65, 0.24], size: [0.6, 1, 0.02], color: glass },
         { geo: "box", mat: "accent", pos: [-0.3, 0.8, 0.27], size: [0.06, 0.6, 0.06], color: sign },
+      ];
+    case 4: {
+      // covered five-foot way and a deep, shaded shopfront
+      const heritage = district === "changkat" || district === "jalan_alor" || district === "pudu";
+      const facade = heritage ? pick(PASTEL, r(5)) : conc;
+      return [
+        { geo: "box", mat: "solid", pos: [0, 0.36, 0], size: [0.88, 0.72, 0.78], color: facade },
+        { geo: "box", mat: "glass", pos: [0, 0.2, 0.4], size: [0.72, 0.28, 0.025], color: glass },
+        { geo: "box", mat: "accent", pos: [0, 0.48, 0.4], size: [0.76, 0.09, 0.035], color: sign },
+        { geo: "box", mat: "solid", pos: [0, 0.56, 0.08], size: [0.94, 0.045, 0.86], color: conc },
+        ...[-0.37, 0.37].map((x) => ({
+          geo: "box" as const,
+          mat: "solid" as const,
+          pos: [x, 0.28, 0.4] as [number, number, number],
+          size: [0.045, 0.5, 0.08] as [number, number, number],
+          color: conc,
+        })),
+        ...[-0.24, 0, 0.24].map((x) => ({
+          geo: "box" as const,
+          mat: "accent" as const,
+          pos: [x, 0.7, 0.4] as [number, number, number],
+          size: [0.045, 0.12, 0.035] as [number, number, number],
+          color: sign,
+        })),
+      ];
+    }
+    case 5: // low commercial podium with rooftop plant and a glazed arcade
+      return [
+        { geo: "box", mat: "solid", pos: [0, 0.22, 0], size: [0.94, 0.44, 0.9], color: conc },
+        { geo: "box", mat: "glass", pos: [0, 0.2, 0.46], size: [0.86, 0.28, 0.025], color: glass },
+        { geo: "box", mat: "accent", pos: [0, 0.39, 0.48], size: [0.88, 0.07, 0.035], color: sign },
+        { geo: "box", mat: "solid", pos: [0, 0.48, 0], size: [0.98, 0.045, 0.94], color: conc },
+        {
+          geo: "box",
+          mat: "solid",
+          pos: [-0.24, 0.59, -0.12],
+          size: [0.18, 0.18, 0.2],
+          color: conc,
+        },
+        {
+          geo: "box",
+          mat: "solid",
+          pos: [0.16, 0.58, -0.14],
+          size: [0.22, 0.16, 0.18],
+          color: conc,
+        },
       ];
   }
 }

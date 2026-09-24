@@ -126,7 +126,9 @@ export function KitBuildings({ grid }: { grid: Tile[] }) {
         rot: facing(grid, i),
         born,
         parts:
-          t.kind === "tower" ? towerParts(i, variant, districtAt(i).id) : shopParts(i, variant),
+          t.kind === "tower"
+            ? towerParts(i, variant, districtAt(i).id)
+            : shopParts(i, variant, districtAt(i).id),
       });
     });
     return out;

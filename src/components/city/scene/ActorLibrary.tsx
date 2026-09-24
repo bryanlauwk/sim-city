@@ -62,6 +62,15 @@ function useDir(seed: number, salt = 7) {
   }, [seed, salt]);
 }
 
+/** Seeded procedural detail so a replay shows the same actor every time. */
+const detail = (seed: number, index: number, salt = 0) => hash(seed * 104729 + index, salt);
+function detailDirection(seed: number, index: number, salt = 0) {
+  const y = detail(seed, index, salt) * 2 - 1;
+  const angle = detail(seed, index, salt + 1) * Math.PI * 2;
+  const ring = Math.sqrt(1 - y * y);
+  return new THREE.Vector3(Math.cos(angle) * ring, y, Math.sin(angle) * ring);
+}
+
 // ---------------------------------------------------------------------------
 // Wildlife
 // ---------------------------------------------------------------------------
@@ -225,14 +234,14 @@ function Durian(p: ActorProps) {
   const spikes = useMemo(
     () =>
       Array.from({ length: 26 }, (_, k) => {
-        const v = new THREE.Vector3().randomDirection();
+        const v = detailDirection(p.seed, k, 23);
         return {
           v,
           q: new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), v),
           k,
         };
       }),
-    [],
+    [p.seed],
   );
   return (
     <Faller {...p}>
@@ -332,11 +341,11 @@ function LionDance({ a, focus, getT, impact, seed }: ActorProps) {
   const s = 0.5 + a.size * 0.12;
   const pops = useMemo(
     () =>
-      Array.from({ length: 40 }, () => ({
-        v: new THREE.Vector3().randomDirection(),
-        at: Math.random() * 6,
+      Array.from({ length: 40 }, (_, k) => ({
+        v: detailDirection(seed, k, 31),
+        at: detail(seed, k, 37) * 6,
       })),
-    [],
+    [seed],
   );
   useFrame(() => {
     const t = getT();
@@ -562,19 +571,19 @@ function FestiveLights({ a, focus, getT, impact }: ActorProps) {
 // ---------------------------------------------------------------------------
 
 /** Haze drifts in: the sky thickens and particles hang in the air. */
-function Haze({ focus, getT, bus }: ActorProps) {
+function Haze({ focus, getT, bus, seed }: ActorProps) {
   const ref = useRef<THREE.InstancedMesh>(null);
   useEffect(() => {
     bus.hazeUntil = bus.now + AFTERMATH + 25;
   }, [bus]);
   const motes = useMemo(
     () =>
-      Array.from({ length: 160 }, () => ({
-        x: (Math.random() - 0.5) * 30,
-        y: 0.5 + Math.random() * 6,
-        z: (Math.random() - 0.5) * 30,
+      Array.from({ length: 160 }, (_, k) => ({
+        x: (detail(seed, k, 41) - 0.5) * 30,
+        y: 0.5 + detail(seed, k, 43) * 6,
+        z: (detail(seed, k, 47) - 0.5) * 30,
       })),
-    [],
+    [seed],
   );
   useFrame(() => {
     const t = getT();
@@ -597,18 +606,18 @@ function Haze({ focus, getT, bus }: ActorProps) {
 }
 
 /** The road caves in: a dark pit opens and debris tumbles in. */
-function Sinkhole({ a, focus, getT, impact }: ActorProps) {
+function Sinkhole({ a, focus, getT, impact, seed }: ActorProps) {
   const pit = useRef<THREE.Mesh>(null);
   const bits = useRef<THREE.InstancedMesh>(null);
   const r = 0.5 + a.size * 0.18;
   const chunks = useMemo(
     () =>
-      Array.from({ length: 24 }, () => ({
-        a: Math.random() * Math.PI * 2,
-        d: Math.random(),
-        s: 0.05 + Math.random() * 0.1,
+      Array.from({ length: 24 }, (_, k) => ({
+        a: detail(seed, k, 53) * Math.PI * 2,
+        d: detail(seed, k, 59),
+        s: 0.05 + detail(seed, k, 61) * 0.1,
       })),
-    [],
+    [seed],
   );
   useFrame(() => {
     const t = getT();
@@ -650,13 +659,13 @@ function Landslide({ a, focus, getT, impact, seed }: ActorProps) {
   const dir = useDir(seed, 19);
   const clods = useMemo(
     () =>
-      Array.from({ length: 40 }, () => ({
-        side: (Math.random() - 0.5) * (1.5 + a.size * 0.3),
-        lag: Math.random() * 1.2,
-        s: 0.15 + Math.random() * 0.25,
-        tree: Math.random() < 0.2,
+      Array.from({ length: 40 }, (_, k) => ({
+        side: (detail(seed, k, 67) - 0.5) * (1.5 + a.size * 0.3),
+        lag: detail(seed, k, 71) * 1.2,
+        s: 0.15 + detail(seed, k, 73) * 0.25,
+        tree: detail(seed, k, 79) < 0.2,
       })),
-    [a.size],
+    [a.size, seed],
   );
   useFrame(() => {
     const t = getT();

@@ -399,7 +399,7 @@ function targetTiles(s: CityState, target: TileTarget): number[] {
   if (target === "random") return shuffle(s, all);
   // A district name.
   const inDistrict = all.filter((i) => districtAt(i).id === target);
-  return inDistrict.length ? shuffle(s, inDistrict) : shuffle(s, all);
+  return shuffle(s, inDistrict);
 }
 
 /** Buildable lots in (or next to) the targeted area. */
@@ -416,8 +416,7 @@ function buildLots(s: CityState, target: TileTarget): number[] {
   } else {
     lots = targetTiles(s, target).filter(free);
   }
-  if (lots.length) return lots;
-  return targetTiles(s, "center").filter(free);
+  return lots;
 }
 
 const DEFAULT_LANDMARK: Landmark = {
