@@ -26,13 +26,32 @@ const meteor: EventResult = eventResultSchema.parse({
     duration_days: 5,
     per_day: { population: 0, happiness: 1, money: 20, pollution: 0, chaos: 0 },
   },
+  spectacle: {
+    actors: [
+      { kind: "meteor", label: "Meteor", color: "#553322", size: 4, count: 1, shape: "blob" },
+    ],
+    crowd: "flee",
+    responders: ["fire", "ambulance"],
+  },
+  followups: [
+    {
+      delay_days: 2,
+      note: "Crater declared a heritage site; hawker stalls move in.",
+      stat_changes: { population: 0, happiness: 3, money: 500, pollution: 0, chaos: 0 },
+      tile_ops: [{ op: "build", target: "center", count: 2, build_kind: "shop", landmark: null }],
+    },
+  ],
 });
 
 describe("city simulation", () => {
-  test("seeded city has roads, buildings and residents", () => {
+  test("seeded city has KL's roads, rivers, landmarks and residents", () => {
     const s = createCity(42);
     const c = countKinds(s.grid);
-    expect(c.road).toBeGreaterThan(30);
+    expect(s.name).toBe("Kuala Lumpur");
+    expect(c.road).toBeGreaterThan(150);
+    expect(c.water).toBeGreaterThan(30);
+    expect(c.forest).toBeGreaterThan(50);
+    expect(s.grid.some((t) => t.landmark?.name === "Petronas Twin Towers")).toBe(true);
     expect(c.house + c.shop + c.tower).toBeGreaterThan(10);
     expect(s.stats.population).toBeGreaterThan(0);
     expect(s.name.length).toBeGreaterThan(3);
@@ -53,10 +72,39 @@ describe("city simulation", () => {
     let s = createCity(3);
     for (let i = 0; i < 5; i++) s = tick(s);
     const next = applyEvent(s, "a meteor hits downtown", meteor);
-    expect(countKinds(next.grid).landmark).toBe(1);
+    expect(countKinds(next.grid).landmark).toBe(countKinds(s.grid).landmark + 1);
     expect(next.grid.some((t) => t.fire > 0)).toBe(true);
     expect(next.log).toHaveLength(1);
     expect(next.ongoing).toHaveLength(1);
+    expect(next.scheduled).toHaveLength(1);
+  });
+
+  test("chain reactions fire as bulletins on schedule", () => {
+    let s = applyEvent(createCity(5), "meteor", meteor);
+    const shops = countKinds(s.grid).shop;
+    s = tick(s);
+    expect(s.bulletins).toHaveLength(0);
+    s = tick(s);
+    expect(s.bulletins).toHaveLength(1);
+    expect(s.bulletins[0].text).toContain("heritage");
+    expect(s.scheduled).toHaveLength(0);
+    expect(countKinds(s.grid).shop).toBeGreaterThanOrEqual(shops);
+  });
+
+  test("district targets land in that district", () => {
+    const s = createCity(8);
+    const next = applyEvent(s, "fire in Chinatown", {
+      ...meteor,
+      tile_ops: [{ op: "burn", target: "chinatown", count: 4, build_kind: null, landmark: null }],
+      followups: [],
+    });
+    const burning = next.grid.map((t, i) => (t.fire > 0 ? i : -1)).filter((i) => i >= 0);
+    expect(burning.length).toBeGreaterThan(0);
+    for (const i of burning) {
+      const x = i % 32;
+      const y = Math.floor(i / 32);
+      expect(x >= 12 && x <= 16 && y >= 15 && y <= 19).toBe(true);
+    }
   });
 
   test("replay reproduces the exact city", () => {

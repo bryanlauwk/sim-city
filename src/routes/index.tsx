@@ -29,9 +29,19 @@ import {
   spendCredits,
   type Credits,
 } from "@/lib/city/persistence";
-import { applyEvent, countKinds, createCity, tick } from "@/lib/city/simulation";
+import {
+  applyEvent,
+  changedTiles,
+  countKinds,
+  createCity,
+  natureScore,
+  tick,
+} from "@/lib/city/simulation";
+import { districtAt, DISTRICTS } from "@/lib/city/kl";
+import type { SimClock, SpectacleRun } from "@/components/city/CityScene";
+import { hourOf } from "@/components/city/scene/common";
 import { simulateEvent } from "@/lib/city/simulate.functions";
-import { SCALE_COST, type CityState } from "@/lib/city/types";
+import { GRID_SIZE, SCALE_COST, type CityState, type EventResult } from "@/lib/city/types";
 import { cn } from "@/lib/utils";
 
 const CityScene = lazy(() => import("@/components/city/CityScene"));
@@ -40,26 +50,83 @@ export const Route = createFileRoute("/")({
   component: Index,
   head: () => ({
     meta: [
-      { title: "Type-a-Disaster — a city that happens to you" },
+      { title: "Type-a-Disaster: Kuala Lumpur" },
       {
         name: "description",
         content:
-          "A tiny low-poly city runs itself. You type what happens to it, and the local paper reports the consequences.",
+          "A living low-poly Kuala Lumpur. Type what happens to it, watch it unfold, and read the paper's deadpan report.",
       },
     ],
   }),
 });
 
-const DAY_MS = 2000;
+const DAY_MS = 12000;
 const SUGGESTIONS = [
-  "A whale lands on city hall",
-  "The mayor legalizes jetpacks",
-  "Free pizza Fridays become law",
-  "A mysterious fog rolls in off the lake",
-  "Godzilla visits for a long weekend",
-  "Everyone gets really into composting",
+  "A whale lands on Dataran Merdeka",
+  "Godzilla stomps through Bukit Bintang",
+  "A UFO hovers over the Petronas Towers",
+  "A thousand monkeys escape from Bukit Nanas",
+  "It rains durians over Chinatown",
+  "Flash flood at Masjid Jamek",
+  "Fireworks for Merdeka Day at KLCC",
 ];
-const SHAKE = { minor: 0.04, citywide: 0.12, apocalyptic: 0.3 } as const;
+const C = (GRID_SIZE - 1) / 2;
+
+const compact = (n: number) => {
+  const a = Math.abs(n);
+  if (a >= 1e6) return `${(n / 1e6).toFixed(a >= 1e7 ? 1 : 2)}M`;
+  if (a >= 1e4) return `${Math.round(n / 1e3)}k`;
+  return Math.round(n).toLocaleString();
+};
+
+/** Where on the map an event lands, in world coordinates. */
+function eventFocus(before: CityState, after: CityState, result: EventResult) {
+  const tiles = changedTiles(before, after);
+  if (!tiles.length) {
+    const target = result.tile_ops[0]?.target;
+    const d = DISTRICTS.find((dd) => dd.id === target);
+    if (!d) return { x: 0, z: 0, radius: 2 };
+    const [x0, y0, x1, y1] = d.rect;
+    return { x: (x0 + x1) / 2 - C, z: (y0 + y1) / 2 - C, radius: 2.5 };
+  }
+  // Centre on the biggest cluster: the mean, then the changed tile nearest it.
+  let mx = 0;
+  let mz = 0;
+  for (const i of tiles) {
+    mx += (i % GRID_SIZE) - C;
+    mz += Math.floor(i / GRID_SIZE) - C;
+  }
+  mx /= tiles.length;
+  mz /= tiles.length;
+  const near = tiles
+    .map((i) => ({ x: (i % GRID_SIZE) - C, z: Math.floor(i / GRID_SIZE) - C }))
+    .sort((p, q) => Math.hypot(p.x - mx, p.z - mz) - Math.hypot(q.x - mx, q.z - mz));
+  const core = near.slice(0, Math.max(1, Math.ceil(near.length / 2)));
+  const x = core.reduce((acc, p) => acc + p.x, 0) / core.length;
+  const z = core.reduce((acc, p) => acc + p.z, 0) / core.length;
+  const spread = Math.max(...core.map((p) => Math.hypot(p.x - x, p.z - z)));
+  return { x, z, radius: Math.min(6, Math.max(1.5, spread + 1)) };
+}
+
+function GameClock({ clock }: { clock: SimClock }) {
+  const [, force] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => force((n) => n + 1), 500);
+    return () => clearInterval(id);
+  }, []);
+  const phase = clock.paused
+    ? null
+    : Math.min(1, Math.max(0, (performance.now() - clock.tickAt) / clock.dayMs));
+  if (phase === null) return <span>paused</span>;
+  const h = hourOf(phase);
+  const hh = Math.floor(h);
+  const mm = Math.floor((h - hh) * 6) * 10;
+  return (
+    <span>
+      {String(hh).padStart(2, "0")}:{String(mm).padStart(2, "0")}
+    </span>
+  );
+}
 
 const newSeed = () => Math.floor(Math.random() * 2 ** 31);
 
@@ -90,7 +157,17 @@ function Index() {
   const [credits, setCredits] = useState<Credits>({ credits: MAX_CREDITS, since: 0 });
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [shake, setShake] = useState({ trigger: 0, strength: 0 });
+  const [run, setRun] = useState<SpectacleRun | null>(null);
+  const [holding, setHolding] = useState(false);
+  const [tickAt, setTickAt] = useState(() => performance.now());
+  const [tremor, setTremor] = useState(0);
+  const cityRef = useRef<CityState | null>(null);
+  cityRef.current = city;
+  const tickAtRef = useRef(tickAt);
+  // The day starts (and resumes) from here: a morning city, not a dark one.
+  const pausedPhase = useRef<number | null>(0.1);
+  const pending = useRef<{ id: number; next: CityState } | null>(null);
+  const runId = useRef(0);
   const [confirmReset, setConfirmReset] = useState(false);
   const [dismissedCollapse, setDismissedCollapse] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -115,14 +192,61 @@ function Index() {
     }
   }, []);
 
-  // Simulation clock.
+  // Simulation clock. Each tick is one day; the scene reads the phase in
+  // between to drive the sun. Time holds still while a spectacle lands.
   const loaded = city !== null;
   const collapsed = city?.collapsed ?? false;
+  const running = loaded && !paused && !collapsed && !holding;
+  const dayMs = fast ? DAY_MS / 4 : DAY_MS;
   useEffect(() => {
-    if (!loaded || paused || collapsed) return;
-    const id = setInterval(() => setCity((c) => (c ? tick(c) : c)), fast ? DAY_MS / 4 : DAY_MS);
-    return () => clearInterval(id);
-  }, [loaded, paused, fast, collapsed]);
+    if (!running) return;
+    if (pausedPhase.current !== null) {
+      tickAtRef.current = performance.now() - pausedPhase.current * dayMs;
+      setTickAt(tickAtRef.current);
+      pausedPhase.current = null;
+    }
+    let timer: ReturnType<typeof setTimeout>;
+    const schedule = () => {
+      const wait = Math.max(0, dayMs - (performance.now() - tickAtRef.current));
+      timer = setTimeout(() => {
+        tickAtRef.current = performance.now();
+        setTickAt(tickAtRef.current);
+        setCity((c) => (c ? tick(c) : c));
+        schedule();
+      }, wait);
+    };
+    schedule();
+    return () => {
+      clearTimeout(timer);
+      pausedPhase.current = Math.min(1, (performance.now() - tickAtRef.current) / dayMs);
+    };
+  }, [running, dayMs]);
+  const clock: SimClock = { tickAt, dayMs, paused: !running };
+
+  // Chain reactions arrive as bulletins; flash them as news alerts.
+  const seenBulletins = useRef<number | null>(null);
+  useEffect(() => {
+    if (!city) return;
+    const n = city.bulletins.length;
+    if (seenBulletins.current !== null && n > seenBulletins.current) {
+      for (const b of city.bulletins.slice(seenBulletins.current)) {
+        toast(`Update · Day ${b.day}`, { description: b.text, duration: 8000 });
+      }
+      setTremor((t) => t + 1);
+    }
+    seenBulletins.current = n;
+  }, [city]);
+
+  const commit = useCallback((id: number) => {
+    const p = pending.current;
+    if (!p || p.id !== id) return;
+    pending.current = null;
+    setCity(p.next);
+    setHolding(false);
+  }, []);
+  const endSpectacle = useCallback((id: number) => {
+    setRun((r) => (r && r.id === id ? null : r));
+  }, []);
 
   // Persist your own city. A shared one only becomes yours once you act on it.
   useEffect(() => {
@@ -146,7 +270,7 @@ function Index() {
 
   const submit = async (text: string) => {
     const event = text.trim();
-    if (!city || busy) return;
+    if (!city || busy || holding) return;
     if (event.length < 3) {
       inputRef.current?.focus();
       return;
@@ -160,6 +284,13 @@ function Index() {
     setBusy(true);
     try {
       const kinds = countKinds(city.grid);
+      const districts: Record<string, number> = {};
+      city.grid.forEach((t, i) => {
+        if (t.kind === "house" || t.kind === "shop" || t.kind === "tower") {
+          const id = districtAt(i).id;
+          districts[id] = (districts[id] ?? 0) + 1;
+        }
+      });
       const res = await simulateEvent({
         data: {
           event,
@@ -168,6 +299,8 @@ function Index() {
             day: city.day,
             stats: city.stats,
             tiles: Object.fromEntries(Object.entries(kinds).filter(([, n]) => n > 0)),
+            nature: natureScore(city.grid, city.stats.pollution),
+            districts,
             recentHeadlines: city.log.slice(-5).map((e) => e.result.headline),
           },
         },
@@ -178,17 +311,34 @@ function Index() {
       }
       const { result, refused } = res;
       adoptShared();
-      setCity((cur) => (cur ? applyEvent(cur, event, result) : cur));
       setDismissedCollapse(false);
       setInput("");
+      const before = cityRef.current;
+      if (!before) return;
+      const next = applyEvent(before, event, result);
       if (refused) {
+        setCity(next);
         toast("No charge", { description: "The council refused to print that one." });
-      } else {
-        const next = spendCredits(available, SCALE_COST[result.scale]);
-        setCredits(next);
-        saveCredits(next);
-        setShake((s) => ({ trigger: s.trigger + 1, strength: SHAKE[result.scale] }));
+        return;
       }
+      const spent = spendCredits(available, SCALE_COST[result.scale]);
+      setCredits(spent);
+      saveCredits(spent);
+      // Hold time, play the spectacle, and apply the damage on impact.
+      const id = ++runId.current;
+      const focus = eventFocus(before, next, result);
+      pending.current = { id, next };
+      setHolding(true);
+      setRun({
+        id,
+        actors: result.spectacle.actors,
+        crowd: result.spectacle.crowd,
+        responders: result.spectacle.responders,
+        focus: { x: focus.x, z: focus.z },
+        radius: focus.radius,
+      });
+      // If the 3D scene isn't running (e.g. no WebGL), don't wait for it.
+      setTimeout(() => commit(id), 7000);
     } catch (error) {
       console.error(error);
       toast.error("Couldn't reach the newsroom. Check your connection and try again.");
@@ -233,7 +383,18 @@ function Index() {
         <div className="absolute inset-0">
           <ClientOnly fallback={<SceneFallback />}>
             <Suspense fallback={<SceneFallback />}>
-              {city ? <CityScene city={city} shake={shake} /> : <SceneFallback />}
+              {city ? (
+                <CityScene
+                  city={city}
+                  clock={clock}
+                  spectacle={run}
+                  onImpact={commit}
+                  onSpectacleDone={endSpectacle}
+                  tremor={tremor}
+                />
+              ) : (
+                <SceneFallback />
+              )}
             </Suspense>
           </ClientOnly>
         </div>
@@ -248,13 +409,12 @@ function Index() {
               {city?.name ?? "Loading…"}
             </h1>
             <p className="font-mono text-[10px] text-muted-foreground">
-              Day {city?.day ?? 0}
-              {paused && " · paused"}
+              Day {city?.day ?? 0} · <GameClock clock={clock} />
             </p>
           </div>
           {st && (
-            <div className="pointer-events-auto grid grid-cols-5 gap-1">
-              <Stat label="Pop." value={st.population.toLocaleString()} />
+            <div className="pointer-events-auto grid grid-cols-3 gap-1 sm:grid-cols-6">
+              <Stat label="Pop." value={compact(st.population)} />
               <Stat
                 label="Mood"
                 value={`${Math.round(st.happiness)}`}
@@ -262,13 +422,18 @@ function Index() {
               />
               <Stat
                 label="Budget"
-                value={`$${Math.round(st.money).toLocaleString()}`}
+                value={`RM${compact(st.money)}`}
                 tone={st.money < 0 ? "bad" : undefined}
               />
               <Stat
                 label="Smog"
                 value={`${Math.round(st.pollution)}`}
                 tone={st.pollution > 60 ? "bad" : undefined}
+              />
+              <Stat
+                label="Nature"
+                value={`${natureScore(city!.grid, st.pollution)}`}
+                tone={natureScore(city!.grid, st.pollution) < 25 ? "bad" : undefined}
               />
               <Stat
                 label="Chaos"
@@ -280,7 +445,7 @@ function Index() {
         </div>
 
         {/* Controls */}
-        <div className="absolute right-3 top-36 flex flex-col gap-1 sm:top-20">
+        <div className="absolute right-3 top-44 flex flex-col gap-1 sm:top-20">
           <Button
             size="icon"
             variant="outline"
@@ -328,7 +493,7 @@ function Index() {
         </div>
 
         {shared && (
-          <div className="absolute left-3 right-16 top-36 border-2 border-ink bg-paper/95 p-2 text-sm sm:top-20 sm:max-w-sm">
+          <div className="absolute left-3 right-16 top-44 border-2 border-ink bg-paper/95 p-2 text-sm sm:top-20 sm:max-w-sm">
             You're reading someone else's city. Type an event to take it over, or{" "}
             <button className="underline" onClick={newCity}>
               start your own
@@ -352,14 +517,14 @@ function Index() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 maxLength={200}
-                disabled={busy}
+                disabled={busy || holding}
                 aria-label="Event"
                 placeholder="Type something that happens to the city…"
                 className="min-w-0 flex-1 bg-transparent px-2 py-2 font-serif-d text-base outline-none placeholder:text-ink/40"
               />
               <Button
                 type="submit"
-                disabled={busy || !city}
+                disabled={busy || holding || !city}
                 className="rounded-none bg-stamp text-paper hover:bg-stamp/90"
               >
                 {busy ? <Loader2 className="animate-spin" /> : <Send />}

@@ -1,9 +1,19 @@
-import { SCALE_COST, type CityState, type EventRecord } from "@/lib/city/types";
+import { SCALE_COST, type Bulletin, type CityState, type EventRecord } from "@/lib/city/types";
 import { cn } from "@/lib/utils";
 
 const SCALE_LABEL = { minor: "Local", citywide: "Citywide", apocalyptic: "Apocalyptic" } as const;
 
-function Story({ ev, lead }: { ev: EventRecord; lead?: boolean }) {
+function Story({
+  ev,
+  lead,
+  updates,
+  pending,
+}: {
+  ev: EventRecord;
+  lead?: boolean;
+  updates: Bulletin[];
+  pending: number;
+}) {
   const r = ev.result;
   return (
     <article className={cn("border-b border-ink/20 pb-4", lead ? "pt-1" : "pt-3")}>
@@ -42,6 +52,23 @@ function Story({ ev, lead }: { ev: EventRecord; lead?: boolean }) {
           ))}
         </div>
       )}
+      {updates.length > 0 && (
+        <ul className="mt-3 space-y-1.5 border-t border-dashed border-ink/30 pt-2">
+          {updates.map((u, i) => (
+            <li key={i} className="text-sm leading-snug">
+              <span className="mr-1.5 bg-stamp px-1 font-mono text-[9px] font-semibold uppercase tracking-wider text-paper">
+                Day {u.day}
+              </span>
+              {u.text}
+            </li>
+          ))}
+        </ul>
+      )}
+      {pending > 0 && (
+        <p className="mt-2 font-mono text-[10px] uppercase tracking-widest text-stamp">
+          Developing story · {pending} more {pending > 1 ? "updates" : "update"} expected
+        </p>
+      )}
     </article>
   );
 }
@@ -49,6 +76,10 @@ function Story({ ev, lead }: { ev: EventRecord; lead?: boolean }) {
 export function Newspaper({ city }: { city: CityState }) {
   const stories = [...city.log].reverse();
   const [lead, ...archive] = stories;
+  const updatesFor = (ev: EventRecord) =>
+    city.bulletins.filter((b) => b.source === ev.result.headline && b.day >= ev.day);
+  const pendingFor = (ev: EventRecord) =>
+    city.scheduled.filter((f) => f.source === ev.result.headline).length;
 
   return (
     <div className="px-5 py-4">
@@ -77,7 +108,7 @@ export function Newspaper({ city }: { city: CityState }) {
 
       <div className="mt-3">
         {lead ? (
-          <Story ev={lead} lead />
+          <Story ev={lead} lead updates={updatesFor(lead)} pending={pendingFor(lead)} />
         ) : (
           <div className="py-6 text-center">
             <h3 className="font-serif-d text-2xl font-bold">Nothing has happened yet</h3>
@@ -93,7 +124,7 @@ export function Newspaper({ city }: { city: CityState }) {
               Archive
             </h4>
             {archive.map((ev, i) => (
-              <Story key={i} ev={ev} />
+              <Story key={i} ev={ev} updates={updatesFor(ev)} pending={pendingFor(ev)} />
             ))}
           </>
         )}
