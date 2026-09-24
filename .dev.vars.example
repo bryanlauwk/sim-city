@@ -1,3 +1,5 @@
 ANTHROPIC_API_KEY="sk-ant-..."
+# Only for organization-level keys that aren't scoped to a workspace:
+# ANTHROPIC_WORKSPACE_ID="wrkspc_..."
 # Optional: override the model used for events (default claude-opus-5)
 # CITY_MODEL="claude-sonnet-5"
