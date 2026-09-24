@@ -1,10 +1,10 @@
 /**
- * Kuala Lumpur's city centre on a 32×32 grid, roughly 100 m per tile
- * (x ≈ (longitude − 101.690) × 1000, y ≈ (3.164 − latitude) × 1000), so the
- * streets and landmarks sit where they really are. The map runs from
- * Dataran Merdeka and Chinatown in the west to KLCC, Bukit Bintang and TRX
- * in the east. Simplified: streets snap to the grid, and buildings are
- * stylised.
+ * Kuala Lumpur's Golden Triangle — Bukit Bintang, KLCC and Raja Chulan — on
+ * a 32×32 grid at roughly 66 m per tile, placed from real coordinates:
+ * x ≈ (longitude − 101.7015) / 0.00062, y ≈ (3.1615 − latitude) / 0.00062.
+ * North is Jalan Ampang and the Petronas Towers, south is Jalan Imbi and
+ * Berjaya Times Square, west is Bukit Nanas, east is Jalan Tun Razak and TRX.
+ * Streets snap to the grid; buildings are stylised.
  *
  * x runs west → east, y runs north → south.
  */
@@ -31,15 +31,7 @@ export const DISTRICTS: District[] = [
   {
     id: "bukit_nanas",
     name: "Bukit Nanas forest reserve",
-    rect: [12, 9, 15, 12],
-    mix: NONE,
-    density: 0,
-    protected: true,
-  },
-  {
-    id: "lake_gardens",
-    name: "Perdana Lake Gardens",
-    rect: [0, 13, 1, 25],
+    rect: [1, 11, 6, 17],
     mix: NONE,
     density: 0,
     protected: true,
@@ -47,130 +39,81 @@ export const DISTRICTS: District[] = [
   {
     id: "jalan_alor",
     name: "Jalan Alor",
-    rect: [19, 17, 19, 20],
-    mix: { house: 0.1, shop: 0.9, tower: 0 },
+    rect: [9, 23, 13, 27],
+    mix: { house: 0.3, shop: 0.7, tower: 0 },
     density: 0.95,
   },
   {
     id: "changkat",
     name: "Changkat Bukit Bintang",
-    rect: [14, 14, 18, 16],
-    mix: { house: 0.5, shop: 0.5, tower: 0 },
+    rect: [6, 19, 12, 22],
+    mix: { house: 0.6, shop: 0.4, tower: 0 },
     density: 0.9,
   },
   {
     id: "bukit_bintang",
     name: "Bukit Bintang",
-    rect: [19, 14, 27, 20],
+    rect: [13, 18, 24, 27],
     mix: { house: 0.05, shop: 0.6, tower: 0.35 },
     density: 0.9,
   },
   {
-    id: "raja_chulan",
-    name: "Jalan Raja Chulan",
-    rect: [12, 12, 28, 13],
-    mix: { house: 0, shop: 0.35, tower: 0.65 },
-    density: 0.85,
+    id: "trx",
+    name: "Tun Razak Exchange",
+    rect: [25, 24, 31, 31],
+    mix: { house: 0, shop: 0.3, tower: 0.7 },
+    density: 0.55,
   },
   {
-    id: "kampung_baru",
-    name: "Kampung Baru",
-    rect: [12, 0, 21, 4],
-    mix: { house: 1, shop: 0, tower: 0 },
-    density: 0.7,
+    id: "imbi",
+    name: "Imbi",
+    rect: [12, 28, 24, 31],
+    mix: { house: 0.2, shop: 0.5, tower: 0.3 },
+    density: 0.8,
+  },
+  {
+    id: "pudu",
+    name: "Pudu",
+    rect: [0, 23, 11, 31],
+    mix: { house: 0.5, shop: 0.4, tower: 0.1 },
+    density: 0.8,
   },
   {
     id: "klcc",
     name: "KLCC",
-    rect: [16, 5, 27, 11],
-    mix: { house: 0, shop: 0.3, tower: 0.7 },
+    rect: [12, 0, 24, 14],
+    mix: { house: 0, shop: 0.25, tower: 0.75 },
     density: 0.8,
   },
   {
     id: "ampang",
     name: "Jalan Ampang",
-    rect: [22, 0, 31, 4],
-    mix: { house: 0.3, shop: 0.3, tower: 0.4 },
-    density: 0.6,
+    rect: [25, 0, 31, 14],
+    mix: { house: 0.2, shop: 0.3, tower: 0.5 },
+    density: 0.65,
   },
   {
-    id: "ampang",
-    name: "Jalan Ampang",
-    rect: [28, 5, 31, 17],
-    mix: { house: 0.3, shop: 0.3, tower: 0.4 },
-    density: 0.6,
-  },
-  {
-    id: "trx",
-    name: "Tun Razak Exchange",
-    rect: [28, 18, 31, 26],
-    mix: { house: 0.1, shop: 0.3, tower: 0.6 },
-    density: 0.5,
-  },
-  {
-    id: "imbi",
-    name: "Imbi",
-    rect: [19, 21, 27, 25],
-    mix: { house: 0.2, shop: 0.5, tower: 0.3 },
+    id: "dang_wangi",
+    name: "Dang Wangi",
+    rect: [0, 0, 11, 14],
+    mix: { house: 0.2, shop: 0.4, tower: 0.4 },
     density: 0.75,
   },
   {
-    id: "chow_kit",
-    name: "Chow Kit",
-    rect: [2, 0, 15, 8],
-    mix: { house: 0.35, shop: 0.55, tower: 0.1 },
-    density: 0.75,
-  },
-  {
-    id: "masjid_jamek",
-    name: "Masjid Jamek",
-    rect: [6, 13, 13, 16],
-    mix: { house: 0.1, shop: 0.5, tower: 0.4 },
-    density: 0.75,
-  },
-  {
-    id: "merdeka",
-    name: "Dataran Merdeka",
-    rect: [2, 13, 5, 25],
-    mix: { house: 0.3, shop: 0.4, tower: 0.3 },
-    density: 0.55,
-  },
-  {
-    id: "chinatown",
-    name: "Chinatown (Petaling Street)",
-    rect: [6, 17, 9, 25],
-    mix: { house: 0.3, shop: 0.7, tower: 0 },
-    density: 0.9,
-  },
-  {
-    id: "pudu",
-    name: "Pudu",
-    rect: [10, 17, 18, 27],
-    mix: { house: 0.4, shop: 0.4, tower: 0.2 },
-    density: 0.75,
-  },
-  {
-    id: "brickfields",
-    name: "Brickfields",
-    rect: [0, 26, 9, 31],
-    mix: { house: 0.6, shop: 0.4, tower: 0 },
-    density: 0.6,
-  },
-  {
-    id: "cheras",
-    name: "Cheras",
-    rect: [19, 26, 31, 31],
-    mix: { house: 0.7, shop: 0.3, tower: 0 },
-    density: 0.5,
+    id: "raja_chulan",
+    name: "Jalan Raja Chulan",
+    rect: [0, 15, 31, 23],
+    mix: { house: 0.05, shop: 0.35, tower: 0.6 },
+    density: 0.85,
   },
 ];
 
 const OUTSKIRTS: District = {
   id: "outskirts",
-  name: "the fringes of the city centre",
+  name: "the edge of the Golden Triangle",
   rect: [0, 0, N - 1, N - 1],
-  mix: { house: 0.6, shop: 0.3, tower: 0.1 },
-  density: 0.5,
+  mix: { house: 0.4, shop: 0.4, tower: 0.2 },
+  density: 0.6,
 };
 
 const districtGrid: District[] = Array.from({ length: N * N }, (_, i) => {
@@ -219,101 +162,91 @@ function polyline(points: Pt[], cb: (x: number, y: number) => void) {
   for (let k = 0; k < points.length - 1; k++) line4(points[k], points[k + 1], cb);
 }
 
-const RIVERS: Pt[][] = [
-  // Sungai Klang, in from Ampang, down past Central Market towards Brickfields
-  [
-    [31, 1],
-    [24, 2],
-    [17, 4],
-    [11, 8],
-    [6, 14],
-    [5, 18],
-    [5, 24],
-    [4, 31],
-  ],
-  // Sungai Gombak, from the north to the confluence at Masjid Jamek
-  [
-    [4, 0],
-    [5, 8],
-    [6, 14],
-  ],
-];
-
 const ROADS: Pt[][] = [
   [
-    [8, 15],
-    [11, 11],
-    [15, 8],
-    [21, 5],
-    [31, 4],
+    [0, 7],
+    [6, 6],
+    [17, 3],
+    [31, 1],
   ], // Jalan Ampang
   [
-    [9, 2],
-    [15, 10],
-    [21, 18],
-    [25, 23],
-    [27, 31],
+    [2, 5],
+    [6, 10],
+    [16, 25],
+    [21, 31],
   ], // Jalan Sultan Ismail
   [
-    [12, 13],
-    [30, 13],
+    [6, 17],
+    [29, 15],
   ], // Jalan Raja Chulan
   [
-    [26, 13],
-    [21, 18],
-    [18, 20],
-    [14, 22],
+    [11, 31],
+    [16, 25],
+    [24, 17],
   ], // Jalan Bukit Bintang
   [
-    [15, 9],
-    [21, 10],
+    [6, 10],
+    [15, 13],
   ], // Jalan P. Ramlee
   [
-    [18, 20],
-    [30, 20],
+    [16, 9],
+    [16, 16],
+  ], // Jalan Pinang
+  [
+    [23, 12],
+    [23, 18],
+  ], // Jalan Kia Peng
+  [
+    [12, 29],
+    [30, 26],
   ], // Jalan Imbi
   [
-    [9, 17],
-    [20, 23],
-    [27, 29],
+    [0, 23],
+    [11, 31],
   ], // Jalan Pudu
   [
     [30, 0],
     [30, 31],
   ], // Jalan Tun Razak
   [
-    [3, 14],
-    [9, 17],
-  ], // Jalan Tun Perak
+    [7, 20],
+    [13, 21],
+  ], // Changkat Bukit Bintang
   [
-    [7, 17],
-    [7, 31],
-  ], // Jalan Sultan / Tun Tan Cheng Lock
+    [9, 23],
+    [13, 27],
+  ], // Jalan Alor
   [
-    [6, 0],
-    [6, 13],
-  ], // Jalan Raja Laut
+    [24, 2],
+    [25, 12],
+  ], // Jalan Yap Kwan Seng
   [
-    [2, 0],
-    [2, 14],
-  ], // Jalan Kuching
+    [25, 7],
+    [29, 7],
+  ], // Jalan Binjai
   [
-    [7, 26],
-    [15, 25],
-    [21, 25],
-  ], // Jalan Maharajalela / Hang Tuah
+    [26, 15],
+    [26, 26],
+  ], // Jalan Conlay
   [
-    [2, 31],
-    [7, 26],
-  ], // Jalan Syed Putra
+    [10, 0],
+    [10, 4],
+  ], // Jalan Kamunting
   [
-    [16, 0],
-    [16, 5],
-  ], // Jalan Raja Abdullah
+    [2, 18],
+    [6, 22],
+  ], // Jalan Bukit Bintang (west)
   [
-    [26, 4],
-    [26, 13],
-  ], // Jalan Stonor / Kia Peng
+    [18, 26],
+    [22, 27],
+  ], // Jalan Walter Grenier
+];
+
+/** The Bukit Bintang scramble crossing and other painted crossings. */
+export const CROSSINGS: Pt[] = [
+  [16, 25],
+  [13, 21],
+  [21, 20],
 ];
 
 export interface RailLine {
@@ -321,6 +254,8 @@ export interface RailLine {
   color: string;
   points: Pt[];
   stations: string[];
+  /** Covered pedestrian walkway rather than a railway. */
+  walkway?: boolean;
 }
 
 export const RAIL_LINES: RailLine[] = [
@@ -328,116 +263,82 @@ export const RAIL_LINES: RailLine[] = [
     name: "KL Monorail",
     color: "#86bc25",
     points: [
-      [0, 31],
-      [8, 25],
-      [14, 24],
-      [21, 21],
-      [21, 18],
-      [20, 13],
-      [15, 11],
-      [13, 5],
-      [12, 0],
+      [5, 5],
+      [8, 9],
+      [14, 18],
+      [16, 25],
+      [13, 30],
+      [12, 31],
     ],
-    stations: [
-      "KL Sentral",
-      "Maharajalela",
-      "Hang Tuah",
-      "Imbi",
-      "Bukit Bintang",
-      "Raja Chulan",
-      "Bukit Nanas",
-      "Medan Tuanku",
-      "Chow Kit",
-    ],
+    stations: ["Medan Tuanku", "Bukit Nanas", "Raja Chulan", "Bukit Bintang", "Imbi", "Hang Tuah"],
   },
   {
     name: "LRT Kelana Jaya",
     color: "#d9223b",
     points: [
-      [0, 26],
-      [6, 19],
-      [7, 14],
-      [12, 8],
-      [21, 7],
-      [28, 3],
-      [31, 2],
+      [0, 8],
+      [19, 4],
+      [29, 2],
+      [31, 1],
     ],
-    stations: [
-      "KL Sentral",
-      "Pasar Seni",
-      "Masjid Jamek",
-      "Dang Wangi",
-      "KLCC",
-      "Ampang Park",
-      "Jelatek",
-    ],
+    stations: ["Dang Wangi", "KLCC", "Ampang Park", "Jelatek"],
   },
   {
     name: "MRT Kajang",
     color: "#0a8a43",
     points: [
-      [0, 17],
-      [6, 19],
-      [10, 21],
-      [20, 19],
-      [28, 21],
-      [31, 25],
+      [0, 28],
+      [15, 25],
+      [26, 29],
+      [31, 31],
     ],
-    stations: [
-      "Muzium Negara",
-      "Pasar Seni",
-      "Merdeka",
-      "Bukit Bintang",
-      "Tun Razak Exchange",
-      "Cochrane",
-    ],
+    stations: ["Merdeka", "Bukit Bintang", "Tun Razak Exchange", "Cochrane"],
   },
   {
-    name: "LRT Ampang / Sri Petaling",
-    color: "#e57200",
+    name: "Pavilion–KLCC walkway",
+    color: "#e7e2d6",
     points: [
-      [5, 0],
-      [6, 8],
-      [7, 14],
-      [9, 19],
-      [14, 24],
-      [16, 31],
+      [19, 19],
+      [19, 15],
+      [17, 13],
+      [16, 9],
     ],
-    stations: ["Sultan Ismail", "Bandaraya", "Masjid Jamek", "Plaza Rakyat", "Hang Tuah", "Pudu"],
+    stations: ["Pavilion", "Jalan Raja Chulan", "Convention Centre", "Suria KLCC"],
+    walkway: true,
   },
 ];
 
-const lm = (name: string, shape: Landmark["shape"], color: string, height: number): Landmark => ({
-  name,
-  shape,
-  color,
-  height,
-});
+const lm = (
+  name: string,
+  shape: Landmark["shape"],
+  color: string,
+  height: number,
+  span?: number,
+): Landmark => ({ name, shape, color, height, ...(span ? { span } : {}) });
 
 /** The trademark buildings, placed where they stand. */
 const LANDMARKS: { at: Pt; landmark: Landmark }[] = [
-  { at: [22, 6], landmark: lm("Petronas Twin Towers", "twin_towers", "#cfd5dd", 3.6) },
-  { at: [22, 7], landmark: lm("Suria KLCC", "mall", "#d9d0c1", 0.7) },
-  { at: [24, 11], landmark: lm("KL Convention Centre", "convention", "#bcc6cf", 0.7) },
-  { at: [14, 11], landmark: lm("Menara KL", "needle", "#ece6d8", 3.6) },
-  { at: [24, 15], landmark: lm("Pavilion Kuala Lumpur", "mall", "#e8dcc8", 1.3) },
-  { at: [25, 17], landmark: lm("Starhill", "mall", "#c9a35a", 0.8) },
-  { at: [22, 17], landmark: lm("Lot 10", "green_facade", "#5c9a52", 0.9) },
-  { at: [20, 19], landmark: lm("Sungei Wang Plaza", "mall", "#d2c4a8", 0.8) },
-  { at: [19, 17], landmark: lm("Jalan Alor food street", "hawker", "#c9302c", 0.3) },
-  { at: [19, 18], landmark: lm("Jalan Alor food street", "hawker", "#c9302c", 0.3) },
-  { at: [17, 16], landmark: lm("Changkat Bukit Bintang", "shophouses", "#e8b04a", 0.5) },
-  { at: [21, 22], landmark: lm("Berjaya Times Square", "twin_block", "#d6c9b0", 2) },
-  { at: [29, 22], landmark: lm("The Exchange 106", "crown_tower", "#8ea9c1", 3.9) },
-  { at: [10, 23], landmark: lm("Merdeka 118", "supertall", "#8fb0cc", 5.5) },
-  { at: [11, 25], landmark: lm("Stadium Merdeka", "stadium", "#e6e1d6", 0.4) },
-  { at: [8, 20], landmark: lm("Petaling Street market", "hawker", "#2f7d4f", 0.35) },
-  { at: [8, 21], landmark: lm("Petaling Street market", "hawker", "#2f7d4f", 0.35) },
-  { at: [6, 18], landmark: lm("Central Market", "art_deco", "#6fa8c9", 0.6) },
-  { at: [7, 15], landmark: lm("Masjid Jamek", "mosque", "#e9c9a0", 1) },
-  { at: [4, 15], landmark: lm("Sultan Abdul Samad Building", "colonial", "#b8663c", 1.1) },
-  { at: [3, 17], landmark: lm("Dataran Merdeka flagpole", "flagpole", "#ffffff", 1.2) },
-  { at: [2, 22], landmark: lm("Masjid Negara", "mosque", "#dfe7ee", 1.2) },
+  { at: [16, 6], landmark: lm("Petronas Twin Towers", "twin_towers", "#cfd5dd", 5.4, 1.8) },
+  { at: [16, 8], landmark: lm("Suria KLCC", "mall", "#ddd3c2", 0.8, 1.7) },
+  { at: [19, 6], landmark: lm("Menara Maxis", "slim_pyramid", "#9fb3c4", 3.3) },
+  { at: [21, 4], landmark: lm("Four Seasons Place", "curve_tower", "#d7dde2", 4.1) },
+  { at: [12, 5], landmark: lm("Ilham Tower", "exoskeleton", "#c9c4bb", 3.3) },
+  { at: [19, 14], landmark: lm("KL Convention Centre", "convention", "#bcc6cf", 0.8, 1.5) },
+  { at: [4, 14], landmark: lm("Menara KL", "needle", "#ece6d8", 5) },
+  { at: [19, 20], landmark: lm("Pavilion Kuala Lumpur", "pavilion", "#e9dfcb", 2.6, 1.8) },
+  { at: [20, 23], landmark: lm("Starhill", "gold_box", "#c9a35a", 0.9, 1.3) },
+  { at: [17, 23], landmark: lm("Lot 10", "green_facade", "#5c9a52", 1.1, 1.2) },
+  { at: [18, 25], landmark: lm("Fahrenheit88", "sign_block", "#f58220", 1, 1.2) },
+  { at: [15, 26], landmark: lm("Sungei Wang Plaza", "sign_block", "#3a6fb0", 1.1, 1.2) },
+  { at: [14, 28], landmark: lm("BB Plaza", "sign_block", "#d23f3f", 0.9) },
+  { at: [14, 30], landmark: lm("Berjaya Times Square", "twin_block", "#d6c9b0", 2.6, 1.6) },
+  { at: [10, 25], landmark: lm("Jalan Alor food street", "hawker", "#c9302c", 0.3) },
+  { at: [12, 26], landmark: lm("Jalan Alor food street", "hawker", "#c9302c", 0.3) },
+  { at: [11, 23], landmark: lm("Jalan Alor food street", "hawker", "#c9302c", 0.3) },
+  { at: [9, 21], landmark: lm("Changkat Bukit Bintang", "shophouses", "#e8b04a", 0.5) },
+  { at: [11, 22], landmark: lm("Changkat Bukit Bintang", "shophouses", "#e8b04a", 0.5) },
+  { at: [27, 30], landmark: lm("The Exchange 106", "crown_tower", "#8ea9c1", 5.3, 1.3) },
+  { at: [1, 30], landmark: lm("Merdeka 118", "supertall", "#8fb0cc", 7.5, 1.3) },
 ];
 
 /** The same base map for every city; buildings are added per city seed. */
@@ -450,15 +351,11 @@ export function klTerrain(): { kinds: TileKind[]; landmarks: Map<number, Landmar
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) set(x, y, k);
   };
 
-  // Green lungs.
-  rect(12, 9, 15, 12, "forest"); // Bukit Nanas
-  rect(0, 13, 1, 25, "forest"); // edge of the Lake Gardens
-  rect(22, 7, 25, 10, "park"); // KLCC Park
-  rect(2, 15, 3, 17, "park"); // Dataran Merdeka padang
-  rect(28, 23, 29, 25, "park"); // TRX city park
-  rect(23, 9, 24, 9, "water"); // Lake Symphony
+  rect(1, 11, 6, 17, "forest"); // Bukit Nanas
+  rect(17, 8, 22, 12, "park"); // KLCC Park
+  rect(18, 10, 20, 10, "water"); // Lake Symphony
+  rect(28, 27, 29, 31, "park"); // TRX city park
 
-  for (const r of RIVERS) polyline(r, (x, y) => set(x, y, "water"));
   for (const r of ROADS) polyline(r, (x, y) => set(x, y, "road"));
 
   const landmarks = new Map<number, Landmark>();
@@ -466,8 +363,24 @@ export function klTerrain(): { kinds: TileKind[]; landmarks: Map<number, Landmar
     at: [x, y],
     landmark,
   } of LANDMARKS) {
-    set(x, y, "landmark");
-    landmarks.set(y * N + x, landmark);
+    const i = y * N + x;
+    kinds[i] = "landmark";
+    landmarks.set(i, landmark);
+    // Big buildings claim the free lots around them as a forecourt.
+    if ((landmark.span ?? 1) >= 1.5) {
+      for (const [dx, dy] of [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ]) {
+        const j = (y + dy) * N + (x + dx);
+        if (x + dx < 0 || y + dy < 0 || x + dx >= N || y + dy >= N) continue;
+        if (kinds[j] !== "empty") continue;
+        kinds[j] = "landmark";
+        landmarks.set(j, lm("", "plaza", "#d8d2c4", 0));
+      }
+    }
   }
   return { kinds, landmarks };
 }

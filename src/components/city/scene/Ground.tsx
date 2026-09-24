@@ -2,7 +2,8 @@ import { useLayoutEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { Tile } from "@/lib/city/types";
-import { hash, tileX, tileZ } from "./common";
+import { CROSSINGS } from "@/lib/city/kl";
+import { CENTER, hash, tileX, tileZ } from "./common";
 
 const BASE: Record<string, string> = {
   empty: "#a3c78a",
@@ -204,6 +205,18 @@ export function Trees({ grid }: { grid: Tile[] }) {
           shade: hash(i, k + 60),
         });
       }
+      // Rain trees shade a third of the streets from the kerb.
+      if (t.kind === "road" && hash(i, 77) < 0.33) {
+        const cx = hash(i, 78) < 0.5 ? -0.42 : 0.42;
+        const cz = hash(i, 79) < 0.5 ? -0.42 : 0.42;
+        out.push({
+          x: tileX(i) + cx,
+          z: tileZ(i) + cz,
+          s: 0.7 + hash(i, 80) * 0.4,
+          palm: hash(i, 81) < 0.2,
+          shade: hash(i, 82),
+        });
+      }
     });
     return out;
   }, [grid]);
@@ -284,5 +297,50 @@ export function Trees({ grid }: { grid: Tile[] }) {
         <coneGeometry args={[0.22, 0.1, 7]} />
       </instancedMesh>
     </group>
+  );
+}
+
+/** Zebra stripes, including the Bukit Bintang scramble crossing. */
+export function Crossings({ grid }: { grid: Tile[] }) {
+  const ref = useRef<THREE.InstancedMesh>(null);
+  const stripes = useMemo(() => {
+    const out: { x: number; z: number; rot: number }[] = [];
+    for (const [cx, cy] of CROSSINGS) {
+      if (grid[cy * 32 + cx]?.kind !== "road") continue;
+      const x = cx - CENTER;
+      const z = cy - CENTER;
+      for (let k = -2; k <= 2; k++) {
+        out.push({ x: x + k * 0.16, z: z - 0.38, rot: 0 });
+        out.push({ x: x + k * 0.16, z: z + 0.38, rot: 0 });
+        out.push({ x: x - 0.38, z: z + k * 0.16, rot: Math.PI / 2 });
+        out.push({ x: x + 0.38, z: z + k * 0.16, rot: Math.PI / 2 });
+      }
+      // The diagonal scramble legs.
+      out.push({ x, z, rot: Math.PI / 4 });
+      out.push({ x, z, rot: -Math.PI / 4 });
+    }
+    return out;
+  }, [grid]);
+  useLayoutEffect(() => {
+    const q = new THREE.Quaternion();
+    stripes.forEach((st, k) => {
+      q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), st.rot);
+      tmpM.compose(new THREE.Vector3(st.x, 0.004, st.z), q, new THREE.Vector3(1, 1, 1));
+      ref.current?.setMatrixAt(k, tmpM);
+    });
+    if (ref.current) {
+      ref.current.count = stripes.length;
+      ref.current.instanceMatrix.needsUpdate = true;
+    }
+  }, [stripes]);
+  return (
+    <instancedMesh
+      ref={ref}
+      args={[undefined, undefined, Math.max(1, stripes.length)]}
+      frustumCulled={false}
+    >
+      <boxGeometry args={[0.07, 0.01, 0.2]} />
+      <meshStandardMaterial color="#f4f1e8" />
+    </instancedMesh>
   );
 }

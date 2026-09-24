@@ -49,8 +49,8 @@ describe("city simulation", () => {
     const c = countKinds(s.grid);
     expect(s.name).toBe("Kuala Lumpur");
     expect(c.road).toBeGreaterThan(150);
-    expect(c.water).toBeGreaterThan(30);
-    expect(c.forest).toBeGreaterThan(30);
+    expect(c.water).toBeGreaterThan(2);
+    expect(c.forest).toBeGreaterThan(25);
     expect(s.grid.some((t) => t.landmark?.name === "Pavilion Kuala Lumpur")).toBe(true);
     expect(s.grid.some((t) => t.landmark?.name === "Merdeka 118")).toBe(true);
     expect(s.grid.some((t) => t.landmark?.name === "Petronas Twin Towers")).toBe(true);
@@ -95,9 +95,9 @@ describe("city simulation", () => {
 
   test("district targets land in that district", () => {
     const s = createCity(8);
-    const next = applyEvent(s, "fire in Chinatown", {
+    const next = applyEvent(s, "fire on Jalan Alor", {
       ...meteor,
-      tile_ops: [{ op: "burn", target: "chinatown", count: 4, build_kind: null, landmark: null }],
+      tile_ops: [{ op: "burn", target: "jalan_alor", count: 4, build_kind: null, landmark: null }],
       followups: [],
     });
     const burning = next.grid.map((t, i) => (t.fire > 0 ? i : -1)).filter((i) => i >= 0);
@@ -105,7 +105,7 @@ describe("city simulation", () => {
     for (const i of burning) {
       const x = i % 32;
       const y = Math.floor(i / 32);
-      expect(x >= 6 && x <= 9 && y >= 17 && y <= 25).toBe(true);
+      expect(x >= 9 && x <= 13 && y >= 23 && y <= 27).toBe(true);
     }
   });
 
@@ -161,7 +161,7 @@ describe("Claude output", () => {
       tile_ops: [
         {
           op: "landmark",
-          target: "Merdeka",
+          target: "KLCC",
           count: 1,
           build: "",
           landmark_name: "Whale",
@@ -204,7 +204,7 @@ describe("Claude output", () => {
     expect(r.success).toBe(true);
     if (!r.success) return;
     expect(r.data.tile_ops).toHaveLength(2);
-    expect(r.data.tile_ops[0].target).toBe("merdeka");
+    expect(r.data.tile_ops[0].target).toBe("klcc");
     expect(r.data.tile_ops[0].landmark?.name).toBe("Whale");
     expect(r.data.tile_ops[1]).toMatchObject({
       target: "bukit_bintang",

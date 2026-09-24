@@ -3,9 +3,9 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import type { CityState } from "@/lib/city/types";
-import { Buildings, LocalHouses } from "./scene/Buildings";
+import { KitBuildings, LocalHouses } from "./scene/Buildings";
 import { createBus, type WorldBus } from "./scene/common";
-import { Ground, StreetLamps, Trees } from "./scene/Ground";
+import { Crossings, Ground, StreetLamps, Trees } from "./scene/Ground";
 import { Life } from "./scene/Life";
 import { Rail } from "./scene/Rail";
 import { Sky } from "./scene/Sky";
@@ -43,8 +43,9 @@ function Shaker({ bus, children }: { bus: WorldBus; children: React.ReactNode })
   return <group ref={ref}>{children}</group>;
 }
 
-const OPENING_TARGET = [4, 0, -2] as const;
-const OPENING_CAMERA: [number, number, number] = [-6, 13, 16];
+// Opening shot: looking north up Jalan Bukit Bintang towards KLCC.
+const OPENING_TARGET = [1, 0, 3] as const;
+const OPENING_CAMERA: [number, number, number] = [-5, 15, 23];
 
 /** Swoops the camera toward the action when a spectacle starts. */
 function CameraDirector({ run }: { run: SpectacleRun | null }) {
@@ -62,7 +63,6 @@ function CameraDirector({ run }: { run: SpectacleRun | null }) {
     toPos: THREE.Vector3;
   } | null>(null);
 
-  // Opening shot: Bukit Bintang in front, the Petronas Towers behind.
   const framed = useRef(false);
   useEffect(() => {
     if (!controls || framed.current) return;
@@ -159,8 +159,9 @@ function CityScene({
       <Shaker bus={bus}>
         <Ground grid={city.grid} />
         <Trees grid={city.grid} />
+        <Crossings grid={city.grid} />
         <StreetLamps grid={city.grid} />
-        <Buildings grid={city.grid} />
+        <KitBuildings grid={city.grid} />
         <LocalHouses grid={city.grid} />
         <TileFx grid={city.grid} />
         {showLabels && <LandmarkLabels grid={city.grid} />}

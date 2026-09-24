@@ -65,9 +65,10 @@ const SUGGESTIONS = [
   "A whale lands on Pavilion KL",
   "Godzilla stomps down Jalan Bukit Bintang",
   "A UFO hovers over the Petronas Towers",
-  "A thousand monkeys escape from Bukit Nanas",
+  "A thousand monkeys swing down from Bukit Nanas",
   "It rains durians on Jalan Alor",
-  "Flash flood at Masjid Jamek",
+  "A tapir wanders into Pavilion",
+  "Flash flood at the Bukit Bintang crossing",
   "Merdeka Day fireworks over KLCC",
 ];
 const C = (GRID_SIZE - 1) / 2;

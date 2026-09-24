@@ -41,9 +41,10 @@ export function LandmarkMesh({ lm }: { lm: Landmark }) {
     case "twin_towers":
       return (
         <group>
-          <TwinTower x={-0.2} h={h * 1.25} color={lm.color} />
-          <TwinTower x={0.2} h={h * 1.25} color={lm.color} />
-          <mesh castShadow position={[0, h * 0.5, 0]}>
+          <TwinTower x={-0.22} h={h} color={lm.color} />
+          <TwinTower x={0.22} h={h} color={lm.color} />
+          {/* The skybridge on the 41st/42nd floors */}
+          <mesh castShadow position={[0, h * 0.42, 0]}>
             <boxGeometry args={[0.3, 0.05, 0.08]} />
             <Mat color="#9aa3ad" metal={0.4} />
           </mesh>
@@ -127,6 +128,145 @@ export function LandmarkMesh({ lm }: { lm: Landmark }) {
           ))}
         </group>
       );
+    case "plaza":
+      return (
+        <group>
+          <mesh receiveShadow position={[0, 0.012, 0]}>
+            <boxGeometry args={[0.98, 0.02, 0.98]} />
+            <Mat color="#d8d2c4" />
+          </mesh>
+          {[-0.3, 0.3].map((x) => (
+            <mesh key={x} castShadow position={[x, 0.08, 0.3]}>
+              <sphereGeometry args={[0.1, 6, 5]} />
+              <Mat color="#5f9e4f" />
+            </mesh>
+          ))}
+        </group>
+      );
+    case "pavilion":
+      // Podium with the crystal atrium at the front, office and residence towers behind.
+      return (
+        <group>
+          <mesh castShadow position={[0, 0.25, 0]}>
+            <boxGeometry args={[0.96, 0.5, 0.9]} />
+            <Mat color={lm.color} />
+          </mesh>
+          <mesh castShadow position={[0, 0.34, 0.42]}>
+            <cylinderGeometry args={[0.26, 0.3, 0.68, 8, 1]} />
+            <meshStandardMaterial color="#b9e0f2" roughness={0.1} transparent opacity={0.8} />
+          </mesh>
+          <mesh position={[0, 0.72, 0.42]}>
+            <octahedronGeometry args={[0.1, 0]} />
+            <meshStandardMaterial color="#d8f3ff" emissive="#9fdcff" emissiveIntensity={0.6} />
+          </mesh>
+          <mesh position={[0, 0.46, 0.46]}>
+            <boxGeometry args={[0.5, 0.07, 0.02]} />
+            <meshStandardMaterial color="#6b2c91" emissive="#6b2c91" emissiveIntensity={0.4} />
+          </mesh>
+          <mesh castShadow position={[-0.22, 0.5 + (h - 0.5) / 2, -0.22]}>
+            <boxGeometry args={[0.3, h - 0.5, 0.3]} />
+            <Mat color="#c9d4dc" metal={0.3} />
+          </mesh>
+          <mesh castShadow position={[0.25, 0.5 + (h * 0.7 - 0.5) / 2, -0.25]}>
+            <boxGeometry args={[0.26, h * 0.7 - 0.5, 0.26]} />
+            <Mat color="#e1dccf" />
+          </mesh>
+        </group>
+      );
+    case "gold_box":
+      return (
+        <group>
+          <mesh castShadow position={[0, h / 2, 0]}>
+            <boxGeometry args={[0.9, h, 0.86]} />
+            <Mat color={lm.color} metal={0.6} />
+          </mesh>
+          {[-0.33, -0.11, 0.11, 0.33].map((x) => (
+            <mesh key={x} position={[x, h / 2, 0.44]}>
+              <boxGeometry args={[0.04, h * 0.9, 0.03]} />
+              <Mat color="#6d5526" />
+            </mesh>
+          ))}
+        </group>
+      );
+    case "sign_block":
+      return (
+        <group>
+          <mesh castShadow position={[0, h / 2, 0]}>
+            <boxGeometry args={[0.9, h, 0.86]} />
+            <Mat color="#ece6da" />
+          </mesh>
+          <mesh position={[0, h * 0.7, 0.44]}>
+            <boxGeometry args={[0.82, h * 0.3, 0.03]} />
+            <meshStandardMaterial color={lm.color} emissive={lm.color} emissiveIntensity={0.35} />
+          </mesh>
+          <mesh position={[0.4, h * 0.45, 0.44]}>
+            <boxGeometry args={[0.07, h * 0.7, 0.07]} />
+            <meshStandardMaterial color={lm.color} emissive={lm.color} emissiveIntensity={0.35} />
+          </mesh>
+          <mesh position={[0, 0.12, 0.44]}>
+            <boxGeometry args={[0.8, 0.18, 0.02]} />
+            <meshStandardMaterial color="#a9cde0" roughness={0.1} />
+          </mesh>
+        </group>
+      );
+    case "slim_pyramid":
+      return (
+        <group>
+          <mesh castShadow position={[0, (h * 0.86) / 2, 0]}>
+            <boxGeometry args={[0.36, h * 0.86, 0.36]} />
+            <Mat color={lm.color} metal={0.4} />
+          </mesh>
+          <mesh
+            castShadow
+            position={[0, h * 0.86 + (h * 0.14) / 2, 0]}
+            rotation={[0, Math.PI / 4, 0]}
+          >
+            <coneGeometry args={[0.26, h * 0.14, 4]} />
+            <Mat color="#dfe5ea" />
+          </mesh>
+        </group>
+      );
+    case "exoskeleton":
+      return (
+        <group>
+          <mesh castShadow position={[0, h / 2, 0]}>
+            <boxGeometry args={[0.4, h, 0.4]} />
+            <Mat color="#7f9cb1" metal={0.3} />
+          </mesh>
+          {[0, 1, 2, 3].map((k) => (
+            <mesh
+              key={k}
+              castShadow
+              position={[
+                k < 2 ? (k === 0 ? -0.21 : 0.21) : 0,
+                h / 2,
+                k >= 2 ? (k === 2 ? -0.21 : 0.21) : 0,
+              ]}
+              rotation={k < 2 ? [0.25, 0, 0] : [0, 0, 0.25]}
+            >
+              <boxGeometry args={[k < 2 ? 0.03 : 0.42, h * 1.02, k < 2 ? 0.42 : 0.03]} />
+              <Mat color={lm.color} />
+            </mesh>
+          ))}
+        </group>
+      );
+    case "curve_tower": {
+      const segs = 7;
+      return (
+        <group>
+          {Array.from({ length: segs }, (_, k) => (
+            <mesh
+              key={k}
+              castShadow
+              position={[Math.sin(k * 0.5) * 0.06, (h / segs) * (k + 0.5), 0]}
+            >
+              <cylinderGeometry args={[0.24 - k * 0.012, 0.25 - k * 0.012, h / segs, 10]} />
+              <Mat color={lm.color} metal={0.3} />
+            </mesh>
+          ))}
+        </group>
+      );
+    }
     case "crown_tower": {
       // The Exchange 106: a square glass shaft that narrows in steps to a crown.
       const tiers = [0.34, 0.31, 0.28, 0.25, 0.21];
@@ -489,7 +629,7 @@ export function LandmarkLabels({ grid }: { grid: Tile[] }) {
     const seen = new Set<string>();
     const out: { i: number; lm: Landmark }[] = [];
     grid.forEach((t, i) => {
-      if (t.kind !== "landmark" || !t.landmark || seen.has(t.landmark.name)) return;
+      if (t.kind !== "landmark" || !t.landmark?.name || seen.has(t.landmark.name)) return;
       seen.add(t.landmark.name);
       out.push({ i, lm: t.landmark });
     });
@@ -523,7 +663,9 @@ export function TileFx({ grid }: { grid: Tile[] }) {
           <group key={i} position={[tileX(i), 0, tileZ(i)]}>
             {t.kind === "landmark" && t.landmark && (
               <PopIn key={`lm-${t.builtDay}`}>
-                <LandmarkMesh lm={t.landmark} />
+                <group scale={[t.landmark.span ?? 1, 1, t.landmark.span ?? 1]}>
+                  <LandmarkMesh lm={t.landmark} />
+                </group>
               </PopIn>
             )}
             {t.kind === "rubble" && <Rubble seed={i + t.builtDay} />}

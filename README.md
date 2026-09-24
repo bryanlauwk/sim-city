@@ -4,14 +4,12 @@ A living, low-poly Kuala Lumpur. You type what happens to it ("a whale lands on 
 
 ## What's on screen
 
-- **Kuala Lumpur's city centre** on a 32×32 map. Each tile is about 100 m, and tiles follow real longitude and latitude, so streets and buildings sit roughly where they are.
-  - **Bukit Bintang:** Pavilion, Lot 10, Starhill and Sungei Wang around the Jalan Bukit Bintang / Jalan Sultan Ismail crossing, plus the Jalan Alor food street and Changkat.
-  - **KLCC:** the Petronas Twin Towers, Suria KLCC, KLCC Park and the Convention Centre.
-  - **Towers:** Menara KL on the Bukit Nanas forest reserve, The Exchange 106 at TRX, Berjaya Times Square, and Merdeka 118 with Stadium Merdeka.
-  - **Old town:** Chinatown's Petaling Street and Central Market, Masjid Jamek where the Klang and Gombak rivers meet, and Dataran Merdeka with the Sultan Abdul Samad Building.
-  - **Neighbourhoods:** Kampung Baru's wooden stilt houses and rows of pastel shophouses.
-  - **Rail:** the Monorail, LRT Kelana Jaya, LRT Ampang and MRT Kajang lines with their real stations.
-  - **Labels:** name tags on landmarks, which you can toggle.
+- **Kuala Lumpur's Golden Triangle** on a 32×32 map. Each tile is about 66 m, placed from real coordinates:
+  - **Bukit Bintang:** the scramble crossing at Jalan Bukit Bintang / Jalan Sultan Ismail, Pavilion (crystal atrium and towers), Lot 10, Starhill, Fahrenheit88, Sungei Wang, BB Plaza, the Jalan Alor lanterns and the Changkat bars.
+  - **KLCC:** the Petronas Twin Towers with their skybridge, Suria KLCC, KLCC Park with Lake Symphony, Menara Maxis, Four Seasons Place, Ilham Tower and the Convention Centre.
+  - **Around the edges:** Menara KL on Bukit Nanas, Berjaya Times Square, The Exchange 106 at TRX, and Merdeka 118 on the south-west horizon.
+  - **Connections:** the Monorail along Jalan Sultan Ismail, the LRT along Jalan Ampang and the MRT, plus the covered Pavilion–KLCC walkway with people on it.
+- **The KL building kit** (`scene/kit.ts`): ordinary shops and towers are assembled from parts (podium, glass shaft, slab, crown, sign band, awning, spire). They are drawn with a facade shader that shows window grids by day and scattered lit windows at night. Shophouse rows and roadside rain trees fill in the streets.
 - **Street life:**
   - Cars, motorbikes and Rapid KL buses on the roads, driving on the left, slowing in rain and jamming when chaos is high.
   - The LRT Kelana Jaya, MRT Kajang and KL Monorail lines, with trains stopping at stations.
@@ -64,7 +62,7 @@ Run `npm run test` (uses Bun) for the simulation tests.
 
 ## Credits
 
-The 3D buildings and trees are from Kenney's [City Kit (Commercial)](https://kenney.nl/assets/city-kit-commercial) and [City Kit (Suburban)](https://kenney.nl/assets/city-kit-suburban), released under CC0. Landmarks, fire, rubble and floods are generated in code.
+Everything in the city is generated in code: buildings, landmarks, trees, vehicles, people and effects. There are no third-party 3D models.
 
 ## Build with Lovable
 
