@@ -1,10 +1,21 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
-import { Html } from "@react-three/drei";
 import * as THREE from "three";
 import type { Actor, ActorKind, ActorShape, CrowdReaction, Responder } from "@/lib/city/types";
 import { hash, type WorldBus } from "./common";
 
+import {
+  AFTERMATH,
+  Faller,
+  Mat,
+  ShapeGeometry,
+  Stomper,
+  ease,
+  type ActorProps,
+} from "./actorParts";
+import { ACTOR_LIBRARY, LIBRARY_IMPACT } from "./ActorLibrary";
+
+export { AFTERMATH };
 export interface SpectacleRun {
   id: number;
   actors: Actor[];
@@ -16,6 +27,7 @@ export interface SpectacleRun {
 
 /** Seconds after start when each kind of actor makes contact. */
 const IMPACT_AT: Record<ActorKind, number> = {
+  ...LIBRARY_IMPACT,
   whale: 2.6,
   meteor: 2.0,
   giant_object: 2.6,
@@ -30,7 +42,6 @@ const IMPACT_AT: Record<ActorKind, number> = {
   storm: 2.2,
   fireworks: 1.2,
 };
-export const AFTERMATH = 10;
 export const impactTime = (actors: Actor[]) => (actors.length ? IMPACT_AT[actors[0].kind] : 0.4);
 
 const RESPONDER_COLOR: Record<Responder, string> = {
@@ -41,88 +52,9 @@ const RESPONDER_COLOR: Record<Responder, string> = {
   cleanup: "#e6801f",
 };
 
-interface ActorProps {
-  a: Actor;
-  focus: { x: number; z: number };
-  getT: () => number;
-  impact: number;
-  bus: WorldBus;
-  seed: number;
-}
-
-const ease = (x: number) => Math.min(1, Math.max(0, x));
-
-function Mat({ color, emissive, opacity }: { color: string; emissive?: string; opacity?: number }) {
-  return (
-    <meshStandardMaterial
-      color={color}
-      flatShading
-      emissive={emissive ?? "#000000"}
-      emissiveIntensity={emissive ? 1.2 : 0}
-      transparent={opacity !== undefined}
-      opacity={opacity ?? 1}
-    />
-  );
-}
-
-function ShapeGeometry({ shape }: { shape: ActorShape }) {
-  switch (shape) {
-    case "box":
-      return <boxGeometry args={[1, 1, 1]} />;
-    case "cone":
-      return <coneGeometry args={[0.55, 1.1, 8]} />;
-    case "ring":
-      return <torusGeometry args={[0.45, 0.16, 8, 16]} />;
-    case "spiky":
-      return <octahedronGeometry args={[0.6, 0]} />;
-    case "sphere":
-      return <sphereGeometry args={[0.5, 12, 10]} />;
-    default:
-      return <icosahedronGeometry args={[0.55, 1]} />;
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Falling things: whale and giant objects
 // ---------------------------------------------------------------------------
-
-function Faller({ a, focus, getT, impact, children }: ActorProps & { children: React.ReactNode }) {
-  const ref = useRef<THREE.Group>(null);
-  const shadow = useRef<THREE.Mesh>(null);
-  const s = 0.4 + a.size * 0.4;
-  useFrame(() => {
-    const g = ref.current;
-    if (!g) return;
-    const t = getT();
-    const k = ease(t / impact);
-    if (t < impact) {
-      g.position.set(focus.x + (1 - k) * 3, 26 * (1 - k * k) + s * 0.35, focus.z - (1 - k) * 2);
-      g.rotation.set(Math.sin(t * 1.5) * 0.4, t * 0.8, Math.cos(t) * 0.2);
-      g.scale.setScalar(s);
-    } else {
-      const since = t - impact;
-      const squash = Math.exp(-since * 5) * Math.cos(since * 18) * 0.35;
-      const sink = Math.max(0, since - 7) * 0.6;
-      g.position.set(focus.x, s * 0.35 - sink, focus.z);
-      g.rotation.set(0, impact * 0.8, 0);
-      g.scale.set(s * (1 + squash * 0.5), s * (1 - squash), s * (1 + squash * 0.5));
-    }
-    if (shadow.current) {
-      shadow.current.position.set(focus.x, 0.03, focus.z);
-      shadow.current.scale.setScalar(s * (0.3 + k * 0.9));
-      shadow.current.visible = t < impact + 7;
-    }
-  });
-  return (
-    <>
-      <group ref={ref}>{children}</group>
-      <mesh ref={shadow} rotation={[-Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[1, 16]} />
-        <meshBasicMaterial color="#000000" transparent opacity={0.3} />
-      </mesh>
-    </>
-  );
-}
 
 function Whale(p: ActorProps) {
   const tail = useRef<THREE.Group>(null);
@@ -232,50 +164,6 @@ function Meteor({ a, focus, getT, impact }: ActorProps) {
 // ---------------------------------------------------------------------------
 // Walkers: kaiju and creatures stomp in from the edge and out the other side
 // ---------------------------------------------------------------------------
-
-function Stomper({
-  a,
-  focus,
-  getT,
-  impact,
-  bus,
-  seed,
-  children,
-}: ActorProps & { children: React.ReactNode }) {
-  const ref = useRef<THREE.Group>(null);
-  const lastStep = useRef(0);
-  const s = 0.3 + a.size * 0.3;
-  const dir = useMemo(() => {
-    const ang = hash(seed, 7) * Math.PI * 2;
-    return new THREE.Vector3(Math.cos(ang), 0, Math.sin(ang));
-  }, [seed]);
-  useFrame(() => {
-    const g = ref.current;
-    if (!g) return;
-    const t = getT();
-    const pause = 2.5;
-    let off: number;
-    if (t < impact) off = 16 * (1 - t / impact);
-    else if (t < impact + pause) off = 0;
-    else off = -16 * ((t - impact - pause) / (AFTERMATH - pause));
-    const walking = t < impact || t > impact + pause;
-    g.position.set(
-      focus.x + dir.x * off,
-      walking ? Math.abs(Math.sin(t * 4)) * 0.12 * s : 0,
-      focus.z + dir.z * off,
-    );
-    g.rotation.y = Math.atan2(-dir.x, -dir.z);
-    g.scale.setScalar(s * (walking ? 1 : 1 + Math.sin((t - impact) * 10) * 0.04));
-    // Each footfall shakes the ground.
-    const step = Math.floor((t * 4) / Math.PI);
-    if (walking && step !== lastStep.current) {
-      lastStep.current = step;
-      bus.shake = Math.max(bus.shake, 0.03 * s);
-    }
-    g.userData.t = t;
-  });
-  return <group ref={ref}>{children}</group>;
-}
 
 function Kaiju(p: ActorProps) {
   const c = p.a.color;
@@ -771,6 +659,11 @@ function ImpactBurst({
 // ---------------------------------------------------------------------------
 
 const HITS_GROUND = new Set<ActorKind>([
+  "tapir",
+  "monitor_lizard",
+  "durian",
+  "landslide",
+  "sinkhole",
   "whale",
   "meteor",
   "giant_object",
@@ -853,10 +746,6 @@ export function SpectacleView({
     }
   });
 
-  const label = run.actors
-    .map((a) => a.label)
-    .filter(Boolean)
-    .join(" · ");
   return (
     <group>
       {run.actors.map((a, i) => {
@@ -893,8 +782,10 @@ export function SpectacleView({
             return <RainOf key={i} {...p} radius={run.radius} />;
           case "fireworks":
             return <Fireworks key={i} {...p} />;
-          default:
-            return null;
+          default: {
+            const Lib = ACTOR_LIBRARY[a.kind as keyof typeof ACTOR_LIBRARY];
+            return Lib ? <Lib key={i} {...p} /> : null;
+          }
         }
       })}
       {primary && HITS_GROUND.has(primary.kind) && (
@@ -905,13 +796,6 @@ export function SpectacleView({
           size={primary.size}
           color={primary.kind === "whale" || primary.kind === "wave" ? "#d8f0ff" : "#c9b89c"}
         />
-      )}
-      {label && (
-        <Html position={[run.focus.x, 3.2, run.focus.z]} center zIndexRange={[20, 0]}>
-          <div className="pointer-events-none whitespace-nowrap border-2 border-black bg-[#fff8e8] px-2 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-wider text-black shadow-[2px_2px_0_0_#000]">
-            {label}
-          </div>
-        </Html>
       )}
     </group>
   );

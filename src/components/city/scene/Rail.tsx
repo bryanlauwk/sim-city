@@ -2,7 +2,7 @@ import { useLayoutEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { RAIL_LINES, type RailLine } from "@/lib/city/kl";
-import { CENTER } from "./common";
+import { CENTER, type WorldBus } from "./common";
 
 const DECK = 1.15;
 const CAR_LEN = 0.42;
@@ -45,7 +45,7 @@ const tmpD = new THREE.Vector3();
 const FWD = new THREE.Vector3(0, 0, 1);
 const ONE = new THREE.Vector3(1, 1, 1);
 
-function Line({ line }: { line: RailLine }) {
+function Line({ line, bus }: { line: RailLine; bus: WorldBus }) {
   const track = useMemo(() => buildTrack(line), [line]);
   const trains = useRef<THREE.InstancedMesh>(null);
 
@@ -81,7 +81,9 @@ function Line({ line }: { line: RailLine }) {
     if (!mesh) return;
     let n = 0;
     for (const tr of trainState) {
-      if (tr.wait > 0) tr.wait -= dt;
+      if (bus.now < bus.railStopUntil) {
+        // Service suspended: trains sit where they are.
+      } else if (tr.wait > 0) tr.wait -= dt;
       else {
         const before = tr.d;
         tr.d += tr.dir * dt * 1.6;
@@ -276,11 +278,11 @@ function Walkway({ line }: { line: RailLine }) {
   );
 }
 
-export function Rail() {
+export function Rail({ bus }: { bus: WorldBus }) {
   return (
     <group>
       {RAIL_LINES.map((l) =>
-        l.walkway ? <Walkway key={l.name} line={l} /> : <Line key={l.name} line={l} />,
+        l.walkway ? <Walkway key={l.name} line={l} /> : <Line key={l.name} line={l} bus={bus} />,
       )}
     </group>
   );

@@ -1,6 +1,6 @@
 import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
-import { Html } from "@react-three/drei";
+import type { LabelSpec } from "./Labels";
 import * as THREE from "three";
 import type { Landmark, Tile } from "@/lib/city/types";
 import { tileX, tileZ } from "./common";
@@ -623,34 +623,24 @@ const LABEL_HEIGHT: Partial<Record<Landmark["shape"], number>> = {
   crown_tower: 1,
 };
 
-/** Name tags over the landmarks, one per name. */
-export function LandmarkLabels({ grid }: { grid: Tile[] }) {
-  const labels = useMemo(() => {
-    const seen = new Set<string>();
-    const out: { i: number; lm: Landmark }[] = [];
-    grid.forEach((t, i) => {
-      if (t.kind !== "landmark" || !t.landmark?.name || seen.has(t.landmark.name)) return;
-      seen.add(t.landmark.name);
-      out.push({ i, lm: t.landmark });
+/** Label anchors over the landmarks, one per name. */
+export function landmarkLabelSpecs(grid: Tile[]): LabelSpec[] {
+  const seen = new Set<string>();
+  const out: LabelSpec[] = [];
+  grid.forEach((t, i) => {
+    const lm = t.landmark;
+    if (t.kind !== "landmark" || !lm?.name || seen.has(lm.name)) return;
+    seen.add(lm.name);
+    out.push({
+      key: `lm-${lm.name}`,
+      x: tileX(i),
+      y: lm.height * (LABEL_HEIGHT[lm.shape] ?? 0.9) + 0.35,
+      z: tileZ(i),
+      text: lm.name,
+      variant: "landmark",
     });
-    return out;
-  }, [grid]);
-  return (
-    <group>
-      {labels.map(({ i, lm }) => (
-        <Html
-          key={i}
-          position={[tileX(i), lm.height * (LABEL_HEIGHT[lm.shape] ?? 0.9) + 0.35, tileZ(i)]}
-          center
-          zIndexRange={[10, 0]}
-        >
-          <div className="pointer-events-none whitespace-nowrap rounded-sm bg-black/65 px-1.5 py-0.5 font-mono text-[9px] font-medium text-white">
-            {lm.name}
-          </div>
-        </Html>
-      ))}
-    </group>
-  );
+  });
+  return out;
 }
 
 export function TileFx({ grid }: { grid: Tile[] }) {

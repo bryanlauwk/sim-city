@@ -67,6 +67,12 @@ export interface WorldBus {
   flash: number;
   /** Seconds of clock time, mirrored for non-frame code. */
   now: number;
+  /** Clock time until which a haze event thickens the air. */
+  hazeUntil: number;
+  /** Clock time until which the power is out. */
+  blackoutUntil: number;
+  /** Clock time until which trains are halted. */
+  railStopUntil: number;
 }
 
 export const createBus = (): WorldBus => ({
@@ -76,6 +82,9 @@ export const createBus = (): WorldBus => ({
   stormUntil: 0,
   flash: 0,
   now: 0,
+  hazeUntil: 0,
+  blackoutUntil: 0,
+  railStopUntil: 0,
 });
 
 /**

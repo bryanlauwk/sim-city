@@ -24,8 +24,14 @@ A living, low-poly Kuala Lumpur. You type what happens to it ("a whale lands on 
 - **The city grows on its own.** One day passes every 12 seconds, or 3 seconds on fast-forward. Happy, solvent districts build new houses, shops and towers, each in their own character: towers in KLCC, shophouses in Chinatown, kampung houses in Kampung Baru. When free land runs out, the city sprawls into unprotected forest, which lowers the **Nature** score. It also rebuilds low-rise districts as high-rise. When smog gets bad, the council turns blocks into parks. The protected reserves (Lake Gardens, Bukit Nanas) are never cleared.
 - **You type events.** Claude returns:
   - **Map effects:** tile changes (destroy, burn, flood, build, landmark, clear), which can target a district by name.
-  - **A spectacle:** actors such as a whale, meteor, kaiju, UFO, tornado, swarm, convoy, a rain of objects, a flood wave, a storm or fireworks, plus how the crowd reacts and which emergency services respond.
+  - **A spectacle:** actors from the library (below), plus how the crowd reacts and which emergency services respond.
   - **Follow-ups:** up to three chain reactions that fire on later days as news bulletins.
+- **The actor & effect library** (`scene/ActorLibrary.tsx` and `scene/Spectacle.tsx`):
+  - **Set pieces:** a whale, meteor, giant falling object, kaiju or creature, UFO, tornado, flood wave, storm and fireworks.
+  - **Crowds:** swarms, convoys, a rain of objects and Grab rider swarms.
+  - **KL wildlife:** a tapir, hornbill, giant monitor lizard and a durian that splits open.
+  - **Festivals:** a lion dance with firecrackers, a Thaipusam procession, a Merdeka parade, festive lanterns and a hot-air balloon.
+  - **Urban mishaps:** haze that thickens the sky, a sinkhole, a landslide, a blackout that turns the lights off, and an LRT breakdown that halts the trains.
 - **Event credits.** You get 5, and one refills every 10 minutes. Minor events cost 1 credit, citywide 2, apocalyptic 3.
 - **Your city, shareable.** The city is saved in the browser. The share button makes a link that replays the whole history. The simulation is deterministic, so a seed plus the event log rebuilds the city exactly.
 

@@ -160,6 +160,21 @@ export const ACTOR_KINDS = [
   "wave",
   "storm",
   "fireworks",
+  "tapir",
+  "hornbill",
+  "monitor_lizard",
+  "durian",
+  "grab_swarm",
+  "hot_air_balloon",
+  "lion_dance",
+  "procession",
+  "parade",
+  "festive_lights",
+  "haze",
+  "sinkhole",
+  "landslide",
+  "blackout",
+  "lrt_breakdown",
 ] as const;
 export type ActorKind = (typeof ACTOR_KINDS)[number];
 

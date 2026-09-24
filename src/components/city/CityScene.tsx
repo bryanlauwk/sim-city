@@ -10,7 +10,8 @@ import { Life } from "./scene/Life";
 import { Rail } from "./scene/Rail";
 import { Sky } from "./scene/Sky";
 import { SpectacleView, type SpectacleRun } from "./scene/Spectacle";
-import { LandmarkLabels, TileFx } from "./scene/TileFx";
+import { TileFx, landmarkLabelSpecs } from "./scene/TileFx";
+import { LabelOverlay, LabelProjector, type LabelRegistry, type LabelSpec } from "./scene/Labels";
 
 export type { SpectacleRun };
 
@@ -121,6 +122,26 @@ function CityScene({
 }: CitySceneProps) {
   const small = typeof window !== "undefined" && window.innerWidth < 640;
   const bus = useMemo(createBus, []);
+  const registry = useRef<LabelRegistry>(new Map());
+  const landmarkLabels = useMemo(() => landmarkLabelSpecs(city.grid), [city.grid]);
+  const labels = useMemo<LabelSpec[]>(() => {
+    const text = spectacle?.actors
+      .map((a) => a.label)
+      .filter(Boolean)
+      .join(" · ");
+    if (!spectacle || !text) return landmarkLabels;
+    return [
+      ...landmarkLabels,
+      {
+        key: `action-${spectacle.id}`,
+        x: spectacle.focus.x,
+        y: 3.2,
+        z: spectacle.focus.z,
+        text,
+        variant: "action",
+      },
+    ];
+  }, [landmarkLabels, spectacle]);
   const clockRef = useRef(clock);
   const frozen = useRef(0);
   if (clock.paused && !clockRef.current.paused) {
@@ -141,53 +162,56 @@ function CityScene({
   }, [tremor, bus]);
 
   return (
-    <Canvas
-      shadows={small ? false : "percentage"}
-      dpr={[1, small ? 1.5 : 2]}
-      camera={{ position: OPENING_CAMERA, fov: 40, far: 200 }}
-      gl={{ antialias: true }}
-    >
-      <Sky
-        seed={city.seed}
-        day={city.day}
-        chaos={city.stats.chaos}
-        pollution={city.stats.pollution}
-        getPhase={getPhase}
-        bus={bus}
-        shadows={!small}
-      />
-      <Shaker bus={bus}>
-        <Ground grid={city.grid} />
-        <Trees grid={city.grid} />
-        <Crossings grid={city.grid} />
-        <StreetLamps grid={city.grid} />
-        <KitBuildings grid={city.grid} />
-        <LocalHouses grid={city.grid} />
-        <TileFx grid={city.grid} />
-        {showLabels && <LandmarkLabels grid={city.grid} />}
-        <Rail />
-        <Life city={city} bus={bus} />
-        {spectacle && (
-          <SpectacleView
-            key={spectacle.id}
-            run={spectacle}
-            bus={bus}
-            onImpact={onImpact}
-            onDone={onSpectacleDone}
-          />
-        )}
-      </Shaker>
-      <CameraDirector run={spectacle} />
-      <OrbitControls
-        makeDefault
-        enablePan
-        screenSpacePanning={false}
-        minDistance={5}
-        maxDistance={55}
-        maxPolarAngle={1.3}
-        minPolarAngle={0.3}
-      />
-    </Canvas>
+    <div className="relative h-full w-full">
+      <Canvas
+        shadows={small ? false : "percentage"}
+        dpr={[1, small ? 1.5 : 2]}
+        camera={{ position: OPENING_CAMERA, fov: 40, far: 200 }}
+        gl={{ antialias: true }}
+      >
+        <Sky
+          seed={city.seed}
+          day={city.day}
+          chaos={city.stats.chaos}
+          pollution={city.stats.pollution}
+          getPhase={getPhase}
+          bus={bus}
+          shadows={!small}
+        />
+        <Shaker bus={bus}>
+          <Ground grid={city.grid} />
+          <Trees grid={city.grid} />
+          <Crossings grid={city.grid} />
+          <StreetLamps grid={city.grid} />
+          <KitBuildings grid={city.grid} />
+          <LocalHouses grid={city.grid} />
+          <TileFx grid={city.grid} />
+          <Rail bus={bus} />
+          <Life city={city} bus={bus} />
+          {spectacle && (
+            <SpectacleView
+              key={spectacle.id}
+              run={spectacle}
+              bus={bus}
+              onImpact={onImpact}
+              onDone={onSpectacleDone}
+            />
+          )}
+        </Shaker>
+        <CameraDirector run={spectacle} />
+        <OrbitControls
+          makeDefault
+          enablePan
+          screenSpacePanning={false}
+          minDistance={5}
+          maxDistance={55}
+          maxPolarAngle={1.3}
+          minPolarAngle={0.3}
+        />
+        <LabelProjector specs={labels} registry={registry} />
+      </Canvas>
+      <LabelOverlay specs={labels} registry={registry} showLandmarks={showLabels} />
+    </div>
   );
 }
 
