@@ -30,11 +30,25 @@ export function useSurfaceMap(url: string) {
   return texture;
 }
 
+export function useNormalMap(url: string) {
+  const texture = useLoader(THREE.TextureLoader, url);
+  useMemo(() => {
+    texture.colorSpace = THREE.NoColorSpace;
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.anisotropy = 8;
+    texture.needsUpdate = true;
+  }, [texture]);
+  return texture;
+}
+
 export function Mat({
   color,
   emissive,
   opacity,
   map,
+  normalMap,
+  normalStrength = 0.35,
   roughness = 0.68,
   metalness = 0,
 }: {
@@ -42,6 +56,8 @@ export function Mat({
   emissive?: string;
   opacity?: number;
   map?: THREE.Texture;
+  normalMap?: THREE.Texture;
+  normalStrength?: number;
   roughness?: number;
   metalness?: number;
 }) {
@@ -49,6 +65,8 @@ export function Mat({
     <meshStandardMaterial
       color={color}
       map={map}
+      normalMap={normalMap}
+      normalScale={normalMap ? new THREE.Vector2(normalStrength, normalStrength) : undefined}
       roughness={roughness}
       metalness={metalness}
       emissive={emissive ?? "#000000"}

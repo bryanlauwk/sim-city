@@ -4,6 +4,7 @@ import * as THREE from "three";
 import type { Tile } from "@/lib/city/types";
 import { CROSSINGS } from "@/lib/city/kl";
 import { CENTER, hash, tileX, tileZ } from "./common";
+import { env } from "./env";
 
 const BASE: Record<string, string> = {
   empty: "#a3c78a",
@@ -25,7 +26,24 @@ const tmpC = new THREE.Color();
 export function Ground({ grid }: { grid: Tile[] }) {
   const land = useRef<THREE.InstancedMesh>(null);
   const roads = useRef<THREE.InstancedMesh>(null);
+  const puddles = useRef<THREE.InstancedMesh>(null);
   const water = useRef<THREE.InstancedMesh>(null);
+  const puddleSpots = useMemo(
+    () =>
+      grid.flatMap((t, i) =>
+        t.kind === "road" && hash(i, 401) < 0.18
+          ? [
+              {
+                x: tileX(i) + (hash(i, 409) - 0.5) * 0.44,
+                z: tileZ(i) + (hash(i, 419) - 0.5) * 0.44,
+                sx: 0.08 + hash(i, 421) * 0.16,
+                sz: 0.035 + hash(i, 431) * 0.07,
+              },
+            ]
+          : [],
+      ),
+    [grid],
+  );
   const counts = useMemo(() => {
     let w = 0;
     let r = 0;
@@ -75,30 +93,75 @@ export function Ground({ grid }: { grid: Tile[] }) {
       roads.current.count = r;
       roads.current.instanceMatrix.needsUpdate = true;
     }
-  }, [grid]);
+    if (puddles.current) {
+      const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+      puddleSpots.forEach((spot, i) => {
+        tmpM.compose(
+          new THREE.Vector3(spot.x, 0.016, spot.z),
+          q,
+          new THREE.Vector3(spot.sx, spot.sz, 1),
+        );
+        puddles.current?.setMatrixAt(i, tmpM);
+      });
+      puddles.current.count = puddleSpots.length;
+      puddles.current.instanceMatrix.needsUpdate = true;
+    }
+  }, [grid, puddleSpots]);
 
-  const roadMap = useLoader(THREE.TextureLoader, "/textures/wet-asphalt.webp");
+  const [roadMap, roadNormal] = useLoader(THREE.TextureLoader, [
+    "/textures/wet-asphalt.webp",
+    "/textures/wet-asphalt.normal.webp",
+  ]);
   const roadMat = useMemo(() => {
     roadMap.colorSpace = THREE.SRGBColorSpace;
-    roadMap.wrapS = THREE.RepeatWrapping;
-    roadMap.wrapT = THREE.RepeatWrapping;
-    roadMap.anisotropy = 8;
-    roadMap.needsUpdate = true;
-    return new THREE.MeshStandardMaterial({ map: roadMap, roughness: 0.88 });
-  }, [roadMap]);
+    roadNormal.colorSpace = THREE.NoColorSpace;
+    for (const texture of [roadMap, roadNormal]) {
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.RepeatWrapping;
+      texture.anisotropy = 8;
+      texture.needsUpdate = true;
+    }
+    return new THREE.MeshPhysicalMaterial({
+      map: roadMap,
+      normalMap: roadNormal,
+      normalScale: new THREE.Vector2(0.28, 0.28),
+      roughness: 0.88,
+      metalness: 0.04,
+      clearcoat: 0.001,
+    });
+  }, [roadMap, roadNormal]);
+
+  const puddleMat = useMemo(
+    () =>
+      new THREE.MeshPhysicalMaterial({
+        color: "#7da2ad",
+        roughness: 0.08,
+        metalness: 0.2,
+        clearcoat: 1,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+      }),
+    [],
+  );
 
   const waterMat = useMemo(() => {
-    const m = new THREE.MeshStandardMaterial({
+    const m = new THREE.MeshPhysicalMaterial({
       color: BASE.water,
       roughness: 0.15,
       metalness: 0.1,
+      clearcoat: 0.8,
       transparent: true,
       opacity: 0.92,
     });
     return m;
   }, []);
-  useFrame(({ clock }) => {
+  useFrame(({ clock }, dt) => {
     waterMat.color.setHSL(0.57, 0.52, 0.47 + Math.sin(clock.elapsedTime * 1.3) * 0.02);
+    const blend = Math.min(1, dt * 1.3);
+    roadMat.roughness += ((env.raining ? 0.3 : 0.88) - roadMat.roughness) * blend;
+    roadMat.clearcoat += ((env.raining ? 0.75 : 0.001) - roadMat.clearcoat) * blend;
+    puddleMat.opacity += ((env.raining ? 0.32 : 0) - puddleMat.opacity) * blend;
   });
 
   return (
@@ -119,6 +182,14 @@ export function Ground({ grid }: { grid: Tile[] }) {
         frustumCulled={false}
       >
         <boxGeometry args={[0.99, 0.012, 0.99]} />
+      </instancedMesh>
+      <instancedMesh
+        ref={puddles}
+        args={[undefined, puddleMat, Math.max(1, puddleSpots.length)]}
+        frustumCulled={false}
+        renderOrder={1}
+      >
+        <circleGeometry args={[1, 24]} />
       </instancedMesh>
       <instancedMesh
         ref={water}

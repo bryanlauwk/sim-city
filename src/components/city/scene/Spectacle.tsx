@@ -12,6 +12,7 @@ import {
   ShapeGeometry,
   Stomper,
   ease,
+  useNormalMap,
   useSurfaceMap,
   type ActorProps,
 } from "./actorParts";
@@ -65,27 +66,83 @@ const detail = (seed: number, index: number, salt = 0) => hash(seed * 104729 + i
 
 function Whale(p: ActorProps) {
   const tail = useRef<THREE.Group>(null);
+  const fins = useRef<THREE.Group>(null);
+  const body = useRef<THREE.Mesh>(null);
+  const spray = useRef<THREE.InstancedMesh>(null);
   const skin = useSurfaceMap("/textures/whale-skin.webp");
+  const skinNormal = useNormalMap("/textures/whale-skin.normal.webp");
+  const droplets = useMemo(
+    () =>
+      Array.from({ length: 32 }, (_, i) => ({
+        angle: detail(p.seed, i, 401) * Math.PI * 2,
+        drift: 0.05 + detail(p.seed, i, 409) * 0.12,
+        lift: 0.5 + detail(p.seed, i, 419) * 0.65,
+        delay: detail(p.seed, i, 421) * 2.2,
+      })),
+    [p.seed],
+  );
   useFrame(() => {
-    if (tail.current) tail.current.rotation.x = Math.sin(p.getT() * 3) * 0.35;
+    const t = p.getT();
+    const since = t - p.impact;
+    const settle = since < 0 ? 1 : Math.exp(-Math.max(0, since) * 0.4);
+    if (tail.current) {
+      tail.current.rotation.x = Math.sin(t * 4) * 0.28 * settle;
+      tail.current.rotation.y = Math.sin(t * 2.6) * 0.1 * settle;
+    }
+    fins.current?.children.forEach((fin, i) => {
+      fin.rotation.z = (i ? -1 : 1) * Math.sin(t * 3.2) * 0.12 * settle;
+    });
+    if (body.current) body.current.scale.y = 0.45 * (1 + Math.sin(t * 1.4) * 0.012);
+    const m = spray.current;
+    if (!m) return;
+    droplets.forEach((drop, i) => {
+      const age = since - 0.3 - drop.delay;
+      if (age < 0 || age > 1.6) {
+        m.setMatrixAt(i, HIDDEN);
+        return;
+      }
+      const radius = drop.drift * age;
+      const y = 0.25 + drop.lift * age - 0.32 * age * age;
+      tmpP.set(Math.cos(drop.angle) * radius, y, -0.04 + Math.sin(drop.angle) * radius);
+      tmpM.compose(tmpP, tmpQ.identity(), tmpS.setScalar(0.008 + (1 - age / 1.6) * 0.013));
+      m.setMatrixAt(i, tmpM);
+    });
+    m.instanceMatrix.needsUpdate = true;
   });
   const c = p.a.color;
   return (
     <Faller {...p}>
-      <mesh castShadow scale={[0.55, 0.45, 1.1]}>
+      <mesh ref={body} castShadow scale={[0.55, 0.45, 1.1]}>
         <sphereGeometry args={[0.5, 32, 24]} />
-        <Mat color="#ffffff" map={skin} roughness={0.42} />
+        <Mat
+          color="#ffffff"
+          map={skin}
+          normalMap={skinNormal}
+          normalStrength={0.22}
+          roughness={0.42}
+        />
       </mesh>
       <mesh position={[0, -0.1, 0.05]} scale={[0.45, 0.3, 0.95]}>
         <sphereGeometry args={[0.5, 12, 8]} />
         <Mat color="#e8eef2" />
       </mesh>
+      <group ref={fins}>
+        {[-1, 1].map((sgn) => (
+          <group key={sgn}>
+            <mesh
+              castShadow
+              position={[sgn * 0.35, -0.1, 0.18]}
+              rotation={[0, sgn * 0.45, sgn * -0.25]}
+              scale={[0.68, 0.07, 0.22]}
+            >
+              <sphereGeometry args={[0.5, 18, 12]} />
+              <Mat color={c} roughness={0.45} />
+            </mesh>
+          </group>
+        ))}
+      </group>
       {[-1, 1].map((sgn) => (
         <group key={sgn}>
-          <mesh position={[sgn * 0.28, -0.1, 0.2]} rotation={[0, sgn * 0.5, sgn * -0.5]}>
-            <boxGeometry args={[0.4, 0.03, 0.18]} />
-            <Mat color={c} />
-          </mesh>
           <mesh position={[sgn * 0.2, 0.04, 0.42]}>
             <sphereGeometry args={[0.035, 6, 6]} />
             <Mat color="#111111" />
@@ -115,11 +172,33 @@ function Whale(p: ActorProps) {
           <coneGeometry args={[0.16, 0.55, 8]} />
           <Mat color={c} />
         </mesh>
-        <mesh position={[0, 0, -0.55]}>
-          <boxGeometry args={[0.8, 0.04, 0.22]} />
-          <Mat color={c} />
-        </mesh>
+        {[-1, 1].map((side) => (
+          <mesh
+            key={side}
+            castShadow
+            position={[side * 0.2, 0, -0.58]}
+            rotation={[0, side * 0.25, side * 0.08]}
+            scale={[0.46, 0.05, 0.22]}
+          >
+            <sphereGeometry args={[0.5, 18, 12]} />
+            <Mat color={c} roughness={0.48} />
+          </mesh>
+        ))}
       </group>
+      <instancedMesh
+        ref={spray}
+        args={[undefined, undefined, droplets.length]}
+        frustumCulled={false}
+      >
+        <sphereGeometry args={[1, 8, 6]} />
+        <meshPhysicalMaterial
+          color="#e5f4f7"
+          roughness={0.08}
+          clearcoat={1}
+          transparent
+          opacity={0.75}
+        />
+      </instancedMesh>
     </Faller>
   );
 }
@@ -144,6 +223,7 @@ function Meteor({ a, focus, getT, impact, seed }: ActorProps) {
   const trail = useRef<THREE.Group>(null);
   const s = 0.25 + a.size * 0.15;
   const rockMap = useSurfaceMap("/textures/wet-asphalt.webp");
+  const rockNormal = useNormalMap("/textures/wet-asphalt.normal.webp");
   const rockGeometry = useMemo(() => {
     const geometry = new THREE.IcosahedronGeometry(1, 2);
     const positions = geometry.getAttribute("position");
@@ -181,7 +261,14 @@ function Meteor({ a, focus, getT, impact, seed }: ActorProps) {
       <group ref={rock} scale={s}>
         <mesh castShadow>
           <primitive object={rockGeometry} attach="geometry" />
-          <Mat color="#776151" map={rockMap} roughness={0.94} emissive="#6a2410" />
+          <Mat
+            color="#776151"
+            map={rockMap}
+            normalMap={rockNormal}
+            normalStrength={0.5}
+            roughness={0.94}
+            emissive="#6a2410"
+          />
         </mesh>
         <mesh scale={1.035}>
           <primitive object={rockGeometry} attach="geometry" />
@@ -209,63 +296,137 @@ function Meteor({ a, focus, getT, impact, seed }: ActorProps) {
 // ---------------------------------------------------------------------------
 
 function Kaiju(p: ActorProps) {
-  const c = p.a.color;
   const tail = useRef<THREE.Group>(null);
   const limbs = useRef<THREE.Group>(null);
+  const head = useRef<THREE.Group>(null);
+  const jaw = useRef<THREE.Mesh>(null);
+  const chest = useRef<THREE.Mesh>(null);
+  const mouthGlow = useRef<THREE.MeshStandardMaterial>(null);
+  const legs = useRef<(THREE.Group | null)[]>([]);
   const scales = useSurfaceMap("/textures/kaiju-scales.webp");
+  const scaleNormal = useNormalMap("/textures/kaiju-scales.normal.webp");
   useFrame(() => {
     const t = p.getT();
-    if (tail.current) tail.current.rotation.y = Math.sin(t * 2.2) * 0.22;
+    const since = t - p.impact;
+    const roar = since > 0.25 && since < 4 ? Math.max(0, Math.sin((since - 0.25) * 3.2)) ** 2 : 0;
+    if (tail.current) {
+      tail.current.rotation.y = Math.sin(t * 2.2) * 0.18;
+      tail.current.children.forEach((segment, i) => {
+        segment.rotation.y = Math.sin(t * 2.2 - i * 0.55) * (0.08 + i * 0.035);
+      });
+    }
+    if (head.current) {
+      head.current.rotation.y = Math.sin(t * 1.15) * 0.085;
+      head.current.position.y = Math.sin(t * 1.2) * 0.018;
+    }
+    if (jaw.current) jaw.current.position.y = 1.76 - roar * 0.13;
+    if (mouthGlow.current) mouthGlow.current.emissiveIntensity = roar * 0.95;
+    if (chest.current) chest.current.scale.y = 0.62 * (1 + Math.sin(t * 1.2) * 0.025);
+    legs.current.forEach((leg, i) => {
+      if (leg) leg.rotation.x = Math.sin(t * 4.4 + i * Math.PI) * 0.14;
+    });
     limbs.current?.children.forEach((limb, i) => {
-      limb.rotation.x = Math.sin(t * 4 + (i % 2) * Math.PI) * (i < 2 ? 0.12 : 0.32);
+      limb.rotation.x = Math.sin(t * 4 + (i % 2) * Math.PI) * 0.16;
+      limb.rotation.z = Math.sin(t * 2.2 + i) * 0.035;
     });
   });
   return (
     <Stomper {...p}>
       <mesh castShadow position={[0, 0.96, -0.08]} scale={[0.62, 0.52, 0.46]}>
         <sphereGeometry args={[1, 24, 18]} />
-        <Mat color="#ffffff" map={scales} roughness={0.82} />
+        <Mat
+          color="#ffffff"
+          map={scales}
+          normalMap={scaleNormal}
+          normalStrength={0.52}
+          roughness={0.82}
+        />
       </mesh>
-      <mesh castShadow position={[0, 1.48, 0.06]} scale={[0.58, 0.62, 0.4]}>
+      <mesh ref={chest} castShadow position={[0, 1.48, 0.06]} scale={[0.58, 0.62, 0.4]}>
         <sphereGeometry args={[1, 24, 18]} />
-        <Mat color="#ffffff" map={scales} roughness={0.8} />
+        <Mat
+          color="#ffffff"
+          map={scales}
+          normalMap={scaleNormal}
+          normalStrength={0.52}
+          roughness={0.8}
+        />
       </mesh>
-      <mesh castShadow position={[0, 1.91, 0.28]} scale={[0.34, 0.3, 0.4]}>
-        <sphereGeometry args={[1, 20, 16]} />
-        <Mat color="#ffffff" map={scales} roughness={0.78} />
-      </mesh>
-      <mesh castShadow position={[0, 1.76, 0.52]} scale={[0.25, 0.13, 0.28]}>
-        <sphereGeometry args={[1, 18, 12]} />
-        <Mat color="#30352e" />
-      </mesh>
+      <group ref={head}>
+        <mesh castShadow position={[0, 1.91, 0.28]} scale={[0.34, 0.3, 0.4]}>
+          <sphereGeometry args={[1, 20, 16]} />
+          <Mat
+            color="#ffffff"
+            map={scales}
+            normalMap={scaleNormal}
+            normalStrength={0.52}
+            roughness={0.78}
+          />
+        </mesh>
+        <mesh position={[0, 1.79, 0.66]} scale={[0.17, 0.045, 0.07]}>
+          <sphereGeometry args={[1, 16, 12]} />
+          <meshStandardMaterial
+            ref={mouthGlow}
+            color="#1c0d0a"
+            emissive="#c74320"
+            emissiveIntensity={0}
+          />
+        </mesh>
+        <mesh ref={jaw} castShadow position={[0, 1.76, 0.52]} scale={[0.25, 0.13, 0.28]}>
+          <sphereGeometry args={[1, 18, 12]} />
+          <Mat color="#30352e" />
+        </mesh>
+        {[-1, 1].map((side) => (
+          <group key={side}>
+            <mesh position={[side * 0.23, 1.98, 0.51]}>
+              <sphereGeometry args={[0.065, 16, 12]} />
+              <Mat color="#efb731" emissive="#714816" />
+            </mesh>
+            <mesh position={[side * 0.25, 1.98, 0.565]} scale={[0.3, 1, 0.35]}>
+              <sphereGeometry args={[0.028, 12, 10]} />
+              <Mat color="#131815" />
+            </mesh>
+          </group>
+        ))}
+      </group>
       {[-1, 1].map((side) => (
         <group key={side}>
-          <mesh position={[side * 0.23, 1.98, 0.51]}>
-            <sphereGeometry args={[0.065, 16, 12]} />
-            <Mat color="#efb731" emissive="#714816" />
-          </mesh>
-          <mesh position={[side * 0.25, 1.98, 0.565]} scale={[0.3, 1, 0.35]}>
-            <sphereGeometry args={[0.028, 12, 10]} />
-            <Mat color="#131815" />
-          </mesh>
           <mesh position={[side * 0.26, 1.15, 0.32]} rotation={[0, 0, side * 0.12]}>
             <capsuleGeometry args={[0.12, 0.36, 5, 12]} />
-            <Mat color="#ffffff" map={scales} roughness={0.82} />
+            <Mat
+              color="#ffffff"
+              map={scales}
+              normalMap={scaleNormal}
+              normalStrength={0.52}
+              roughness={0.82}
+            />
           </mesh>
-          <mesh castShadow position={[side * 0.26, 0.48, 0.02]} scale={[0.2, 0.5, 0.2]}>
-            <sphereGeometry args={[0.5, 18, 14]} />
-            <Mat color="#ffffff" map={scales} roughness={0.82} />
-          </mesh>
-          <mesh castShadow position={[side * 0.26, 0.12, 0.18]} scale={[0.2, 0.12, 0.3]}>
-            <sphereGeometry args={[0.5, 16, 12]} />
-            <Mat color="#394139" />
-          </mesh>
-          {[-0.12, 0, 0.12].map((toe) => (
-            <mesh key={toe} position={[side * 0.26 + toe, 0.1, 0.39]} rotation={[0.18, 0, 0]}>
-              <coneGeometry args={[0.04, 0.16, 8]} />
-              <Mat color="#ded8c4" />
+          <group
+            ref={(node) => {
+              legs.current[side > 0 ? 1 : 0] = node;
+            }}
+          >
+            <mesh castShadow position={[side * 0.26, 0.48, 0.02]} scale={[0.2, 0.5, 0.2]}>
+              <sphereGeometry args={[0.5, 18, 14]} />
+              <Mat
+                color="#ffffff"
+                map={scales}
+                normalMap={scaleNormal}
+                normalStrength={0.52}
+                roughness={0.82}
+              />
             </mesh>
-          ))}
+            <mesh castShadow position={[side * 0.26, 0.12, 0.18]} scale={[0.2, 0.12, 0.3]}>
+              <sphereGeometry args={[0.5, 16, 12]} />
+              <Mat color="#394139" />
+            </mesh>
+            {[-0.12, 0, 0.12].map((toe) => (
+              <mesh key={toe} position={[side * 0.26 + toe, 0.1, 0.39]} rotation={[0.18, 0, 0]}>
+                <coneGeometry args={[0.04, 0.16, 8]} />
+                <Mat color="#ded8c4" />
+              </mesh>
+            ))}
+          </group>
         </group>
       ))}
       <group ref={limbs}>
@@ -273,11 +434,11 @@ function Kaiju(p: ActorProps) {
           <group key={x}>
             <mesh position={[x, 1.3, 0.24]} rotation={[0, 0, x * 0.3]}>
               <capsuleGeometry args={[0.095, 0.38, 5, 10]} />
-              <Mat color="#ffffff" map={scales} />
+              <Mat color="#ffffff" map={scales} normalMap={scaleNormal} normalStrength={0.5} />
             </mesh>
             <mesh position={[x * 1.13, 1.06, 0.38]} rotation={[0.25, 0, x * 0.2]}>
               <capsuleGeometry args={[0.075, 0.28, 5, 10]} />
-              <Mat color="#ffffff" map={scales} />
+              <Mat color="#ffffff" map={scales} normalMap={scaleNormal} normalStrength={0.5} />
             </mesh>
             {[-1, 0, 1].map((claw) => (
               <mesh
@@ -307,7 +468,13 @@ function Kaiju(p: ActorProps) {
         {[0, 1, 2, 3].map((i) => (
           <mesh key={i} position={[0, -0.025 * i, -0.23 * i]} rotation={[-0.15, 0, 0]}>
             <capsuleGeometry args={[0.22 - i * 0.045, 0.34, 5, 10]} />
-            <Mat color="#ffffff" map={scales} roughness={0.84} />
+            <Mat
+              color="#ffffff"
+              map={scales}
+              normalMap={scaleNormal}
+              normalStrength={0.52}
+              roughness={0.84}
+            />
           </mesh>
         ))}
       </group>
@@ -318,6 +485,7 @@ function Kaiju(p: ActorProps) {
 function Creature(p: ActorProps) {
   const legs = useRef<THREE.Group>(null);
   const scales = useSurfaceMap("/textures/kaiju-scales.webp");
+  const scaleNormal = useNormalMap("/textures/kaiju-scales.normal.webp");
   useFrame(() => {
     const t = p.getT();
     legs.current?.children.forEach(
@@ -328,11 +496,23 @@ function Creature(p: ActorProps) {
     <Stomper {...p}>
       <mesh castShadow position={[0, 0.73, -0.04]} scale={[0.4, 0.32, 0.63]}>
         <sphereGeometry args={[1, 24, 18]} />
-        <Mat color={p.a.color} map={scales} roughness={0.84} />
+        <Mat
+          color={p.a.color}
+          map={scales}
+          normalMap={scaleNormal}
+          normalStrength={0.48}
+          roughness={0.84}
+        />
       </mesh>
       <mesh castShadow position={[0, 0.97, 0.54]} scale={[0.26, 0.24, 0.33]}>
         <sphereGeometry args={[1, 20, 16]} />
-        <Mat color={p.a.color} map={scales} roughness={0.82} />
+        <Mat
+          color={p.a.color}
+          map={scales}
+          normalMap={scaleNormal}
+          normalStrength={0.48}
+          roughness={0.82}
+        />
       </mesh>
       {[-1, 1].map((side) => (
         <group key={side}>
@@ -346,7 +526,13 @@ function Creature(p: ActorProps) {
           </mesh>
           <mesh position={[side * 0.07, 1.14, 0.53]} rotation={[0.1, 0, side * -0.2]}>
             <coneGeometry args={[0.065, 0.2, 8]} />
-            <Mat color="#79806b" map={scales} roughness={0.88} />
+            <Mat
+              color="#79806b"
+              map={scales}
+              normalMap={scaleNormal}
+              normalStrength={0.48}
+              roughness={0.88}
+            />
           </mesh>
         </group>
       ))}
@@ -363,13 +549,25 @@ function Creature(p: ActorProps) {
         ].map(([x, z], i) => (
           <mesh key={i} castShadow position={[x, 0.3, z]}>
             <capsuleGeometry args={[0.07, 0.32, 4, 10]} />
-            <Mat color={p.a.color} map={scales} roughness={0.86} />
+            <Mat
+              color={p.a.color}
+              map={scales}
+              normalMap={scaleNormal}
+              normalStrength={0.48}
+              roughness={0.86}
+            />
           </mesh>
         ))}
       </group>
       <mesh position={[0, 0.9, -0.7]} rotation={[-0.8, 0, 0]}>
         <coneGeometry args={[0.055, 0.72, 10]} />
-        <Mat color={p.a.color} map={scales} roughness={0.88} />
+        <Mat
+          color={p.a.color}
+          map={scales}
+          normalMap={scaleNormal}
+          normalStrength={0.48}
+          roughness={0.88}
+        />
       </mesh>
     </Stomper>
   );
@@ -862,6 +1060,8 @@ function ImpactBurst({
 }) {
   const ring = useRef<THREE.Mesh>(null);
   const debris = useRef<THREE.InstancedMesh>(null);
+  const plume = useRef<THREE.InstancedMesh>(null);
+  const watery = color === "#d8f0ff";
   const parts = useMemo(
     () =>
       Array.from({ length: 28 }, (_, i) => ({
@@ -873,6 +1073,17 @@ function ImpactBurst({
         r: detail(seed, i, 197) * 6,
       })),
     [size, seed],
+  );
+  const clouds = useMemo(
+    () =>
+      Array.from({ length: 56 }, (_, i) => ({
+        angle: detail(seed, i, 433) * Math.PI * 2,
+        delay: detail(seed, i, 439) * 0.48,
+        speed: 0.75 + detail(seed, i, 443) * 1.35,
+        lift: 0.22 + detail(seed, i, 449) * 0.85,
+        scale: 0.65 + detail(seed, i, 457) * 0.95,
+      })),
+    [seed],
   );
   useFrame(() => {
     const lt = getT() - impact;
@@ -901,6 +1112,34 @@ function ImpactBurst({
       m.setMatrixAt(i, tmpM);
     });
     m.instanceMatrix.needsUpdate = true;
+    const spray = plume.current;
+    if (!spray) return;
+    clouds.forEach((particle, i) => {
+      const age = lt - particle.delay;
+      const duration = watery ? 1.45 : 2.25;
+      if (age < 0 || age > duration) {
+        spray.setMatrixAt(i, HIDDEN);
+        return;
+      }
+      const spread = (0.85 + size * 0.16) * particle.speed * age;
+      const y = watery
+        ? 0.12 + particle.lift * age * 2 - 1.25 * age * age
+        : 0.1 + particle.lift * Math.sqrt(age) + age * 0.1;
+      if (y < 0) {
+        spray.setMatrixAt(i, HIDDEN);
+        return;
+      }
+      const radius = Math.max(0.001, Math.sin((Math.PI * age) / duration));
+      const scale = (watery ? 0.055 : 0.11) * particle.scale * radius;
+      tmpP.set(
+        focus.x + Math.cos(particle.angle) * spread,
+        y,
+        focus.z + Math.sin(particle.angle) * spread,
+      );
+      tmpM.compose(tmpP, tmpQ.identity(), tmpS.set(scale * 1.4, scale * 0.72, scale));
+      spray.setMatrixAt(i, tmpM);
+    });
+    spray.instanceMatrix.needsUpdate = true;
   });
   return (
     <>
@@ -911,6 +1150,16 @@ function ImpactBurst({
       <instancedMesh ref={debris} args={[undefined, undefined, parts.length]} frustumCulled={false}>
         <boxGeometry args={[1, 1, 1]} />
         <meshStandardMaterial color={color} roughness={0.9} />
+      </instancedMesh>
+      <instancedMesh ref={plume} args={[undefined, undefined, clouds.length]} frustumCulled={false}>
+        <sphereGeometry args={[1, 10, 8]} />
+        <meshPhysicalMaterial
+          color={watery ? "#e3f6f8" : "#aa9b85"}
+          roughness={0.9}
+          transparent
+          opacity={watery ? 0.5 : 0.3}
+          depthWrite={false}
+        />
       </instancedMesh>
     </>
   );

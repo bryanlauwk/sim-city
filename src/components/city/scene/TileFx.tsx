@@ -4,22 +4,31 @@ import type { LabelSpec } from "./Labels";
 import * as THREE from "three";
 import type { Landmark, Tile } from "@/lib/city/types";
 import { tileX, tileZ } from "./common";
-import { useSurfaceMap } from "./actorParts";
+import { useNormalMap, useSurfaceMap } from "./actorParts";
 
 function Mat({
   color,
   metal = 0,
   map,
+  normalMap,
   roughness = 0.58,
 }: {
   color: string;
   metal?: number;
   map?: THREE.Texture;
+  normalMap?: THREE.Texture;
   roughness?: number;
 }) {
   // No environment map in the scene, so keep metalness low or surfaces go black.
   return (
-    <meshStandardMaterial color={color} map={map} roughness={roughness} metalness={metal * 0.25} />
+    <meshStandardMaterial
+      color={color}
+      map={map}
+      normalMap={normalMap}
+      normalScale={normalMap ? new THREE.Vector2(0.22, 0.22) : undefined}
+      roughness={roughness}
+      metalness={metal * 0.25}
+    />
   );
 }
 
@@ -59,7 +68,9 @@ export function LandmarkMesh({ lm }: { lm: Landmark }) {
   const h = lm.height;
   const glass = useSurfaceMap("/textures/curtain-glass.webp");
   const plaster = useSurfaceMap("/textures/heritage-plaster.webp");
+  const plasterNormal = useNormalMap("/textures/heritage-plaster.normal.webp");
   const roof = useSurfaceMap("/textures/terracotta-roof.webp");
+  const roofNormal = useNormalMap("/textures/terracotta-roof.normal.webp");
   const mat = <Mat color={lm.color} />;
   switch (lm.shape) {
     case "twin_towers":
@@ -109,7 +120,7 @@ export function LandmarkMesh({ lm }: { lm: Landmark }) {
         <group scale={Math.max(0.7, h)}>
           <mesh castShadow position={[0, 0.12, 0]}>
             <boxGeometry args={[0.6, 0.24, 0.6]} />
-            <Mat color="#ffffff" map={plaster} />
+            <Mat color="#ffffff" map={plaster} normalMap={plasterNormal} />
           </mesh>
           <mesh castShadow position={[0, 0.24, 0]}>
             <sphereGeometry args={[0.22, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2]} />
@@ -119,7 +130,7 @@ export function LandmarkMesh({ lm }: { lm: Landmark }) {
             <group key={x} position={[x, 0, 0.36]}>
               <mesh castShadow position={[0, 0.3, 0]}>
                 <cylinderGeometry args={[0.035, 0.04, 0.6, 6]} />
-                <Mat color="#ffffff" map={plaster} />
+                <Mat color="#ffffff" map={plaster} normalMap={plasterNormal} />
               </mesh>
               <mesh castShadow position={[0, 0.65, 0]}>
                 <coneGeometry args={[0.05, 0.1, 6]} />
@@ -134,7 +145,7 @@ export function LandmarkMesh({ lm }: { lm: Landmark }) {
         <group scale={Math.max(0.8, h)}>
           <mesh castShadow position={[0, 0.14, 0]}>
             <boxGeometry args={[0.9, 0.28, 0.38]} />
-            <Mat color="#ffffff" map={plaster} />
+            <Mat color="#ffffff" map={plaster} normalMap={plasterNormal} />
           </mesh>
           <mesh castShadow position={[0, 0.42, 0]}>
             <boxGeometry args={[0.16, 0.34, 0.16]} />
@@ -412,11 +423,11 @@ export function LandmarkMesh({ lm }: { lm: Landmark }) {
             <group key={c} position={[-0.33 + k * 0.22, 0, 0]}>
               <mesh castShadow position={[0, 0.22 * h * 2, 0]}>
                 <boxGeometry args={[0.2, 0.44 * h * 2, 0.7]} />
-                <Mat color={c} map={plaster} roughness={0.86} />
+                <Mat color={c} map={plaster} normalMap={plasterNormal} roughness={0.86} />
               </mesh>
               <mesh castShadow position={[0, 0.46 * h * 2, 0]}>
                 <boxGeometry args={[0.22, 0.05, 0.74]} />
-                <Mat color="#ffffff" map={roof} roughness={0.9} />
+                <Mat color="#ffffff" map={roof} normalMap={roofNormal} roughness={0.9} />
               </mesh>
             </group>
           ))}

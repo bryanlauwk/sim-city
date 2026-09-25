@@ -4,13 +4,14 @@ import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import type { CityState } from "@/lib/city/types";
 import { KitBuildings, LocalHouses } from "./scene/Buildings";
-import { createBus, type WorldBus } from "./scene/common";
+import { createBus, hash, type WorldBus } from "./scene/common";
+import { env } from "./scene/env";
 import { Crossings, Ground, StreetLamps, Trees } from "./scene/Ground";
 import { KLStreetProps } from "./scene/KLStreetProps";
 import { Life } from "./scene/Life";
 import { Rail } from "./scene/Rail";
 import { Sky } from "./scene/Sky";
-import { SpectacleView, type SpectacleRun } from "./scene/Spectacle";
+import { SpectacleView, impactTime, type SpectacleRun } from "./scene/Spectacle";
 import { TileFx, landmarkLabelSpecs } from "./scene/TileFx";
 import { LabelOverlay, LabelProjector, type LabelRegistry, type LabelSpec } from "./scene/Labels";
 
@@ -26,21 +27,25 @@ export interface SimClock {
 /** Shakes everything inside it; any system can add to bus.shake. */
 function Shaker({ bus, children }: { bus: WorldBus; children: React.ReactNode }) {
   const ref = useRef<THREE.Group>(null);
+  const phase = useRef(0);
   useFrame((_, dt) => {
     const g = ref.current;
     if (!g) return;
     const a = bus.shake;
     if (a <= 0.002) {
       g.position.set(0, 0, 0);
+      g.rotation.z = 0;
       bus.shake = 0;
       return;
     }
+    phase.current += Math.min(dt, 0.05) * 34;
     g.position.set(
-      (Math.random() - 0.5) * a,
-      (Math.random() - 0.5) * a * 0.5,
-      (Math.random() - 0.5) * a,
+      Math.sin(phase.current * 1.7) * a * 0.46,
+      Math.cos(phase.current * 2.1) * a * 0.16,
+      Math.sin(phase.current * 1.3 + 1) * a * 0.38,
     );
-    bus.shake *= Math.pow(0.02, Math.min(dt, 0.05));
+    g.rotation.z = Math.sin(phase.current * 1.2) * a * 0.006;
+    bus.shake *= Math.exp(-Math.min(dt, 0.05) * 7);
   });
   return <group ref={ref}>{children}</group>;
 }
@@ -48,6 +53,38 @@ function Shaker({ bus, children }: { bus: WorldBus; children: React.ReactNode })
 // Opening shot: looking north up Jalan Bukit Bintang towards KLCC.
 const OPENING_TARGET = [1, 0, 3] as const;
 const OPENING_CAMERA: [number, number, number] = [-5, 15, 23];
+
+function ActionLights({ run }: { run: SpectacleRun }) {
+  const key = useRef<THREE.PointLight>(null);
+  const rim = useRef<THREE.PointLight>(null);
+  useFrame((_, dt) => {
+    const blend = Math.min(1, dt * 4);
+    if (key.current)
+      key.current.intensity += ((env.night ? 45 : 17) - key.current.intensity) * blend;
+    if (rim.current)
+      rim.current.intensity += ((env.night ? 28 : 10) - rim.current.intensity) * blend;
+  });
+  return (
+    <>
+      <pointLight
+        ref={key}
+        position={[run.focus.x + 3, 7, run.focus.z + 4]}
+        color="#ffe4bd"
+        intensity={17}
+        distance={16}
+        decay={2}
+      />
+      <pointLight
+        ref={rim}
+        position={[run.focus.x - 4, 6, run.focus.z - 3]}
+        color="#a4c9f3"
+        intensity={10}
+        distance={14}
+        decay={2}
+      />
+    </>
+  );
+}
 
 /** Swoops the camera toward the action when a spectacle starts. */
 function CameraDirector({ run }: { run: SpectacleRun | null }) {
@@ -63,7 +100,17 @@ function CameraDirector({ run }: { run: SpectacleRun | null }) {
     fromPos: THREE.Vector3;
     toTarget: THREE.Vector3;
     toPos: THREE.Vector3;
+    offset: THREE.Vector3;
   } | null>(null);
+  const follow = useRef<{
+    start: number;
+    x: number;
+    z: number;
+    impact: number;
+    focus: { x: number; z: number };
+  } | null>(null);
+  const subject = useMemo(() => new THREE.Vector3(), []);
+  const delta = useMemo(() => new THREE.Vector3(), []);
 
   const framed = useRef(false);
   useEffect(() => {
@@ -74,25 +121,70 @@ function CameraDirector({ run }: { run: SpectacleRun | null }) {
   }, [controls]);
 
   useEffect(() => {
-    if (!run || !controls) return;
-    const toTarget = new THREE.Vector3(run.focus.x, 0, run.focus.z);
+    if (!run || !controls) {
+      follow.current = null;
+      return;
+    }
+    const size = Math.max(1, run.actors[0]?.size ?? 1);
+    const toTarget = new THREE.Vector3(run.focus.x, Math.min(1.5, size * 0.3), run.focus.z);
     // Come in close and fairly steep, from the south-east, so towers don't
     // hide the action.
-    const toPos = toTarget.clone().add(new THREE.Vector3(6, 14, 8));
+    const offset = new THREE.Vector3(4 + size * 0.15, 6 + size * 0.25, 5 + size * 0.15);
+    const toPos = toTarget.clone().add(offset);
     move.current = {
       start: clock.elapsedTime,
       fromTarget: controls.target.clone(),
       fromPos: camera.position.clone(),
       toTarget,
       toPos,
+      offset,
     };
-  }, [run?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    const kind = run.actors[0]?.kind;
+    if (kind === "kaiju" || kind === "creature") {
+      const angle = hash(run.id * 31, 7) * Math.PI * 2;
+      follow.current = {
+        start: clock.elapsedTime,
+        x: Math.cos(angle),
+        z: Math.sin(angle),
+        impact: impactTime(run.actors),
+        focus: run.focus,
+      };
+    } else follow.current = null;
+  }, [run?.id, controls]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useFrame(({ clock: c }) => {
+  useFrame(({ clock: c }, dt) => {
     const m = move.current;
-    if (!controls || !m) return;
-    const k = Math.min(1, (c.elapsedTime - m.start) / 2);
-    const e = k * k * (3 - 2 * k);
+    if (!controls) return;
+    const tracking = follow.current;
+    if (tracking) {
+      const t = c.elapsedTime - tracking.start;
+      const pause = 2.5;
+      const off =
+        t < tracking.impact
+          ? 16 * (1 - t / tracking.impact)
+          : t < tracking.impact + pause
+            ? 0
+            : -16 * ((t - tracking.impact - pause) / (10 - pause));
+      const limited = Math.max(-12, Math.min(12, off));
+      subject.set(
+        tracking.focus.x + tracking.x * limited,
+        controls.target.y,
+        tracking.focus.z + tracking.z * limited,
+      );
+      if (m) {
+        m.toTarget.x = subject.x;
+        m.toTarget.z = subject.z;
+        m.toPos.copy(m.toTarget).add(m.offset);
+      } else {
+        delta.subVectors(subject, controls.target).multiplyScalar(1 - Math.exp(-dt * 2.5));
+        controls.target.add(delta);
+        camera.position.add(delta);
+        controls.update();
+      }
+    }
+    if (!m) return;
+    const k = Math.min(1, (c.elapsedTime - m.start) / 2.4);
+    const e = k * k * k * (k * (k * 6 - 15) + 10);
     controls.target.lerpVectors(m.fromTarget, m.toTarget, e);
     camera.position.lerpVectors(m.fromPos, m.toPos, e);
     controls.update();
@@ -165,10 +257,15 @@ function CityScene({
   return (
     <div className="relative h-full w-full">
       <Canvas
-        shadows={small ? false : "percentage"}
+        shadows={small ? false : "soft"}
         dpr={[1, small ? 1.5 : 2]}
         camera={{ position: OPENING_CAMERA, fov: 40, far: 200 }}
-        gl={{ antialias: true }}
+        gl={{
+          antialias: true,
+          toneMapping: THREE.ACESFilmicToneMapping,
+          toneMappingExposure: 1.05,
+          powerPreference: "high-performance",
+        }}
       >
         <Sky
           seed={city.seed}
@@ -179,6 +276,7 @@ function CityScene({
           bus={bus}
           shadows={!small}
         />
+        {spectacle && <ActionLights run={spectacle} />}
         <Shaker bus={bus}>
           <Ground grid={city.grid} />
           <Trees grid={city.grid} />
@@ -212,7 +310,7 @@ function CityScene({
         />
         <LabelProjector specs={labels} registry={registry} />
       </Canvas>
-      <LabelOverlay specs={labels} registry={registry} showLandmarks={showLabels} />
+      <LabelOverlay specs={labels} registry={registry} showLandmarks={showLabels && !spectacle} />
     </div>
   );
 }

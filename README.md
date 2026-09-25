@@ -1,6 +1,6 @@
 # Type-a-Disaster: Kuala Lumpur
 
-A living, low-poly Kuala Lumpur. You type what happens to it ("a whale lands on Dataran Merdeka", "Godzilla stomps through Bukit Bintang"). Claude decides the consequences and choreographs what you see: the whale really falls out of the sky, people flee and then come back to gawk, fire engines and ambulances race in along the roads, and the chain reaction keeps unfolding over the next few days. The town paper reports all of it with a straight face.
+A living, detailed procedural Kuala Lumpur. You type what happens to it ("a whale lands on Dataran Merdeka", "Godzilla stomps through Bukit Bintang"). Claude decides the consequences and choreographs what you see: the whale falls out of the sky, people flee and then come back to gawk, fire engines and ambulances race in along the roads, and the chain reaction keeps unfolding over the next few days. The town paper reports all of it with a straight face.
 
 ## What's on screen
 
@@ -32,6 +32,7 @@ A living, low-poly Kuala Lumpur. You type what happens to it ("a whale lands on 
   - **KL wildlife:** a tapir, hornbill, giant monitor lizard and a durian that splits open.
   - **Festivals:** a lion dance with firecrackers, a Thaipusam procession, a Merdeka parade, festive lanterns and a hot-air balloon.
   - **Urban mishaps:** haze that thickens the sky, a sinkhole, a landslide, a blackout that turns the lights off, and an LRT breakdown that halts the trains.
+- **Animation and surfaces:** the camera closes in on event actors and follows roaming creatures; tapirs breathe and walk, hornbills bank and flap, durians split and scatter pulp, whales flex their fins and spray water, and kaiju stride and roar. Impacts throw up debris and dust. Normal maps add surface relief to animals, roads, plaster, wood and roof tiles. Wet roads develop puddles and reflections; storms bring slanted rain, drifting clouds and lightning. These are procedural, stylised assets rather than scanned photorealistic models.
 - **Event credits.** You get 5, and one refills every 10 minutes. Minor events cost 1 credit, citywide 2, apocalyptic 3.
 - **Your city, shareable.** The city is saved in the browser. The share button makes a link that replays the whole history. The simulation is deterministic, so a seed plus the event log rebuilds the city exactly.
 
@@ -69,21 +70,25 @@ Setup:
 
 Without these secrets, custom actors fall back to their built-in stand-ins.
 
+## Surface map pipeline
+
+The source surface images are in `public/textures`. The nine `.normal.webp` maps add subtle relief without a 3D service or new runtime dependency. If a source image changes, install Pillow and run `python3 scripts/derive_normal_maps.py` to regenerate its normal map.
+
 ## Code map
 
-| Path | What it does |
-| --- | --- |
-| `src/lib/city/kl.ts` | The city-centre map: districts, rivers, streets, rail lines, landmarks |
-| `src/lib/city/simulation.ts` | Deterministic sim: growth, sprawl, redevelopment, events, chain reactions, replay |
-| `src/lib/city/schema.ts` | Zod validation and clamping of event results, plus the JSON schema sent to Claude |
-| `src/lib/city/newsroom.server.ts` | Server-only Claude call (structured output, refusal fallback) |
-| `src/lib/city/simulate.functions.ts` | Server functions the page calls (events, studio polling), with per-IP throttles |
-| `src/lib/city/actorLibrary.server.ts` | Shared generated-actor library: Supabase lookups, caps, Meshy tasks, re-hosting |
-| `src/lib/city/persistence.ts` | localStorage save, credits, share-link encoding |
-| `src/components/city/CityScene.tsx` | three.js / react-three-fiber scene and camera director |
-| `src/components/city/scene/*` | Instanced buildings, ground and trees, rail, street life, sky and weather, event spectacles |
-| `src/components/city/Newspaper.tsx` | The Gazette sidebar |
-| `src/routes/index.tsx` | The game page |
+| Path                                  | What it does                                                                                |
+| ------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `src/lib/city/kl.ts`                  | The city-centre map: districts, rivers, streets, rail lines, landmarks                      |
+| `src/lib/city/simulation.ts`          | Deterministic sim: growth, sprawl, redevelopment, events, chain reactions, replay           |
+| `src/lib/city/schema.ts`              | Zod validation and clamping of event results, plus the JSON schema sent to Claude           |
+| `src/lib/city/newsroom.server.ts`     | Server-only Claude call (structured output, refusal fallback)                               |
+| `src/lib/city/simulate.functions.ts`  | Server functions the page calls (events, studio polling), with per-IP throttles             |
+| `src/lib/city/actorLibrary.server.ts` | Shared generated-actor library: Supabase lookups, caps, Meshy tasks, re-hosting             |
+| `src/lib/city/persistence.ts`         | localStorage save, credits, share-link encoding                                             |
+| `src/components/city/CityScene.tsx`   | three.js / react-three-fiber scene and camera director                                      |
+| `src/components/city/scene/*`         | Instanced buildings, ground and trees, rail, street life, sky and weather, event spectacles |
+| `src/components/city/Newspaper.tsx`   | The Gazette sidebar                                                                         |
+| `src/routes/index.tsx`                | The game page                                                                               |
 
 Run `npm run test` (uses Bun) for the simulation tests.
 

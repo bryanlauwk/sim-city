@@ -14,6 +14,7 @@ const CHAOS = new THREE.Color("#d9714f");
 const SMOG = new THREE.Color("#b7ab86");
 
 const RAIN_DROPS = 700;
+const RAIN_AXIS = new THREE.Vector3(0, 0, 1);
 
 interface Props {
   seed: number;
@@ -26,8 +27,9 @@ interface Props {
 }
 
 export function Sky({ seed, day, chaos, pollution, getPhase, bus, shadows }: Props) {
-  const { scene } = useThree();
+  const { scene, gl } = useThree();
   const sun = useRef<THREE.DirectionalLight>(null);
+  const moon = useRef<THREE.DirectionalLight>(null);
   const hemi = useRef<THREE.HemisphereLight>(null);
   const rain = useRef<THREE.InstancedMesh>(null);
   const clouds = useRef<THREE.InstancedMesh>(null);
@@ -35,36 +37,43 @@ export function Sky({ seed, day, chaos, pollution, getPhase, bus, shadows }: Pro
   const target = useMemo(() => new THREE.Color(), []);
   const drops = useMemo(
     () =>
-      Array.from({ length: RAIN_DROPS }, () => ({
-        x: (Math.random() - 0.5) * 34,
-        y: Math.random() * 14,
-        z: (Math.random() - 0.5) * 34,
+      Array.from({ length: RAIN_DROPS }, (_, k) => ({
+        x: (hash(seed + k, 311) - 0.5) * 34,
+        y: hash(seed + k, 313) * 14,
+        z: (hash(seed + k, 317) - 0.5) * 34,
+        cycle: 0,
       })),
-    [],
+    [seed],
   );
   const cloudSpots = useMemo(
     () =>
       Array.from({ length: 12 }, (_, k) => ({
-        a: (k / 12) * Math.PI * 2 + Math.random() * 0.4,
-        r: 30 + Math.random() * 12,
-        y: 9 + Math.random() * 5,
-        s: 2 + Math.random() * 2.5,
-        speed: 0.01 + Math.random() * 0.01,
+        a: (k / 12) * Math.PI * 2 + hash(seed + k, 331) * 0.4,
+        r: 30 + hash(seed + k, 337) * 12,
+        y: 9 + hash(seed + k, 347) * 5,
+        s: 2 + hash(seed + k, 349) * 2.5,
+        speed: 0.01 + hash(seed + k, 353) * 0.01,
       })),
-    [],
+    [seed],
   );
   const cloudMat = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
         color: "#ffffff",
-        flatShading: true,
+        roughness: 1,
         transparent: true,
-        opacity: 0.9,
+        opacity: 0.84,
+        depthWrite: false,
       }),
     [],
   );
   const m = useMemo(() => new THREE.Matrix4(), []);
+  const p = useMemo(() => new THREE.Vector3(), []);
+  const q = useMemo(() => new THREE.Quaternion(), []);
+  const scale = useMemo(() => new THREE.Vector3(), []);
   const lightning = useRef(0);
+  const nextLightning = useRef(0);
+  const wasRaining = useRef(false);
 
   useFrame(({ clock }, rawDt) => {
     const dt = Math.min(rawDt, 0.05);
@@ -79,8 +88,14 @@ export function Sky({ seed, day, chaos, pollution, getPhase, bus, shadows }: Pro
     env.night = isNight(hour);
     env.raining = raining;
 
-    // Lightning during storms.
-    if (raining && Math.random() < dt * (stormy ? 1.2 : 0.25)) lightning.current = 1;
+    // Irregular but seeded lightning flashes as a storm builds.
+    if (raining && !wasRaining.current) nextLightning.current = now + 1.5;
+    wasRaining.current = raining;
+    if (raining && now >= nextLightning.current) {
+      lightning.current = 1;
+      nextLightning.current =
+        now + (stormy ? 0.8 : 4) + hash(seed + day, Math.floor(now * 7)) * (stormy ? 1.4 : 3);
+    }
     lightning.current = Math.max(0, lightning.current - dt * 4);
     bus.flash = lightning.current;
 
@@ -96,6 +111,9 @@ export function Sky({ seed, day, chaos, pollution, getPhase, bus, shadows }: Pro
     if (lightning.current > 0) target.lerp(new THREE.Color("#ffffff"), lightning.current * 0.6);
     sky.lerp(target, Math.min(1, dt * 3));
     scene.background = sky;
+    gl.toneMappingExposure +=
+      (0.88 + daylight * 0.38 + lightning.current * 0.12 - gl.toneMappingExposure) *
+      Math.min(1, dt * 2);
     if (scene.fog) {
       scene.fog.color.copy(sky);
       const fog = scene.fog as THREE.Fog;
@@ -107,8 +125,12 @@ export function Sky({ seed, day, chaos, pollution, getPhase, bus, shadows }: Pro
     const az = ((hour - 6) / 12) * Math.PI;
     if (sun.current) {
       sun.current.position.set(Math.cos(az) * 22, 4 + daylight * 24, 10 + Math.sin(az) * 4);
-      sun.current.intensity = (0.1 + daylight * 2) * (raining ? 0.4 : 1);
+      sun.current.intensity = (0.03 + daylight * 2.25) * (raining ? 0.36 : 1);
       sun.current.color.setHSL(0.09, 0.8, 0.6 + daylight * 0.35);
+    }
+    if (moon.current) {
+      moon.current.intensity = (1 - daylight) * (env.night ? 0.4 : 0.06);
+      moon.current.position.set(-18, 23, -12);
     }
     if (hemi.current) {
       hemi.current.intensity =
@@ -127,14 +149,18 @@ export function Sky({ seed, day, chaos, pollution, getPhase, bus, shadows }: Pro
     const r = rain.current;
     if (r) {
       if (raining) {
+        q.setFromAxisAngle(RAIN_AXIS, 0.18 + Math.sin(now * 0.35) * 0.1);
         drops.forEach((d, k) => {
           d.y -= dt * 16;
+          d.x += dt * Math.sin(now * 0.35) * 1.5;
           if (d.y < 0) {
-            d.y = 12 + Math.random() * 2;
-            d.x = (Math.random() - 0.5) * 34;
-            d.z = (Math.random() - 0.5) * 34;
+            d.cycle++;
+            d.y = 12 + hash(seed + k + d.cycle * 103, 359) * 2;
+            d.x = (hash(seed + k + d.cycle * 103, 367) - 0.5) * 34;
+            d.z = (hash(seed + k + d.cycle * 103, 373) - 0.5) * 34;
           }
-          m.makeTranslation(d.x, d.y, d.z);
+          p.set(d.x, d.y, d.z);
+          m.compose(p, q, scale.set(1, 1, 1));
           r.setMatrixAt(k, m);
         });
         r.count = RAIN_DROPS;
@@ -148,12 +174,16 @@ export function Sky({ seed, day, chaos, pollution, getPhase, bus, shadows }: Pro
       cloudMat.color.set(raining ? "#6f7780" : env.night ? "#3a4560" : "#ffffff");
       cloudSpots.forEach((s, k) => {
         s.a += dt * s.speed;
-        m.compose(
-          new THREE.Vector3(Math.cos(s.a) * s.r, raining ? s.y - 2 : s.y, Math.sin(s.a) * s.r),
-          new THREE.Quaternion(),
-          new THREE.Vector3(s.s * 1.6, s.s * 0.45, s.s),
-        );
-        c.setMatrixAt(k, m);
+        for (let lobe = 0; lobe < 4; lobe++) {
+          const offset = lobe - 1.5;
+          p.set(
+            Math.cos(s.a) * s.r + offset * s.s * 0.7,
+            (raining ? s.y - 2 : s.y) + Math.sin(k * 2.1 + lobe) * s.s * 0.12,
+            Math.sin(s.a) * s.r + Math.cos(k + lobe) * s.s * 0.3,
+          );
+          m.compose(p, q.identity(), scale.set(s.s * 0.9, s.s * 0.34, s.s * 0.65));
+          c.setMatrixAt(k * 4 + lobe, m);
+        }
       });
       c.instanceMatrix.needsUpdate = true;
     }
@@ -163,6 +193,7 @@ export function Sky({ seed, day, chaos, pollution, getPhase, bus, shadows }: Pro
     <>
       <fog attach="fog" args={["#bcdcf0", 40, 95]} />
       <hemisphereLight ref={hemi} args={["#fff8e7", "#5f7552", 0.9]} />
+      <directionalLight ref={moon} color="#a9c6eb" intensity={0} />
       <directionalLight
         ref={sun}
         castShadow={shadows}
@@ -177,11 +208,11 @@ export function Sky({ seed, day, chaos, pollution, getPhase, bus, shadows }: Pro
         shadow-bias={-0.0005}
       />
       <instancedMesh ref={rain} args={[undefined, undefined, RAIN_DROPS]} frustumCulled={false}>
-        <boxGeometry args={[0.012, 0.35, 0.012]} />
-        <meshBasicMaterial color="#c9d6e3" transparent opacity={0.55} />
+        <boxGeometry args={[0.008, 0.32, 0.008]} />
+        <meshBasicMaterial color="#cbdce7" transparent opacity={0.48} />
       </instancedMesh>
-      <instancedMesh ref={clouds} args={[undefined, cloudMat, 12]} frustumCulled={false}>
-        <dodecahedronGeometry args={[1, 0]} />
+      <instancedMesh ref={clouds} args={[undefined, cloudMat, 48]} frustumCulled={false}>
+        <sphereGeometry args={[1, 16, 12]} />
       </instancedMesh>
     </>
   );

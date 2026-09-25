@@ -14,6 +14,7 @@ import {
   Mat,
   Stomper,
   ease,
+  useNormalMap,
   useSurfaceMap,
   type ActorProps,
 } from "./actorParts";
@@ -86,7 +87,10 @@ function detailDirection(seed: number, index: number, salt = 0) {
 /** Malayan tapir: black front and back, white saddle, long snout. */
 function Tapir(p: ActorProps) {
   const legs = useRef<THREE.Group>(null);
+  const torso = useRef<THREE.Group>(null);
+  const head = useRef<THREE.Group>(null);
   const fur = useSurfaceMap("/textures/tapir-fur.webp");
+  const furNormal = useNormalMap("/textures/tapir-fur.normal.webp");
   const saddle = useMemo(() => {
     const texture = fur.clone();
     texture.wrapT = THREE.ClampToEdgeWrapping;
@@ -95,54 +99,84 @@ function Tapir(p: ActorProps) {
     texture.needsUpdate = true;
     return texture;
   }, [fur]);
+  const saddleNormal = useMemo(() => {
+    const texture = furNormal.clone();
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.repeat.set(1, 0.36);
+    texture.offset.set(0, 0.32);
+    texture.needsUpdate = true;
+    return texture;
+  }, [furNormal]);
   useFrame(() => {
     const t = p.getT();
+    if (torso.current) {
+      torso.current.position.y = Math.sin(t * 2.4) * 0.018;
+      torso.current.rotation.z = Math.sin(t * 3.5) * 0.025;
+    }
+    if (head.current) {
+      head.current.rotation.y = Math.sin(t * 1.7) * 0.07;
+      head.current.rotation.x = Math.sin(t * 2.6) * 0.035;
+    }
     legs.current?.children.forEach(
       (l, i) => (l.rotation.x = Math.sin(t * 7 + (i % 2) * Math.PI) * 0.45),
     );
   });
   return (
     <Stomper {...p}>
-      <mesh castShadow position={[0, 0.7, 0.38]} scale={[0.5, 0.5, 0.45]}>
-        <sphereGeometry args={[0.6, 20, 16]} />
-        <Mat color="#1c1c1c" />
-      </mesh>
-      <mesh castShadow position={[0, 0.72, -0.05]} scale={[0.55, 0.55, 0.5]}>
-        <sphereGeometry args={[0.6, 24, 18]} />
-        <Mat color="#ffffff" map={saddle} roughness={0.95} />
-      </mesh>
-      <mesh castShadow position={[0, 0.7, -0.45]} scale={[0.5, 0.5, 0.45]}>
-        <sphereGeometry args={[0.6, 20, 16]} />
-        <Mat color="#1c1c1c" />
-      </mesh>
-      <mesh castShadow position={[0, 0.78, 0.8]} scale={[0.32, 0.32, 0.36]}>
-        <sphereGeometry args={[0.6, 20, 16]} />
-        <Mat color="#1c1c1c" />
-      </mesh>
-      <mesh castShadow position={[0, 0.66, 1.05]} rotation={[1.2, 0, 0]}>
-        <cylinderGeometry args={[0.05, 0.08, 0.3, 6]} />
-        <Mat color="#1c1c1c" />
-      </mesh>
-      {[-1, 1].map((side) => (
-        <group key={side}>
-          <mesh castShadow position={[side * 0.16, 1.02, 0.62]} rotation={[0.15, 0, side * -0.24]}>
-            <coneGeometry args={[0.1, 0.26, 10]} />
-            <Mat color="#171918" />
-          </mesh>
-          <mesh position={[side * 0.25, 0.86, 0.76]}>
-            <sphereGeometry args={[0.038, 12, 10]} />
-            <Mat color="#090b0b" />
-          </mesh>
-          <mesh position={[side * 0.267, 0.872, 0.779]}>
-            <sphereGeometry args={[0.01, 8, 6]} />
-            <Mat color="#e4dfcf" />
-          </mesh>
-          <mesh position={[side * 0.055, 0.64, 1.18]} rotation={[1.2, 0, 0]}>
-            <sphereGeometry args={[0.018, 8, 6]} />
-            <Mat color="#070909" />
-          </mesh>
-        </group>
-      ))}
+      <group ref={torso}>
+        <mesh castShadow position={[0, 0.7, 0.38]} scale={[0.5, 0.5, 0.45]}>
+          <sphereGeometry args={[0.6, 20, 16]} />
+          <Mat color="#1c1c1c" normalMap={furNormal} normalStrength={0.18} />
+        </mesh>
+        <mesh castShadow position={[0, 0.72, -0.05]} scale={[0.55, 0.55, 0.5]}>
+          <sphereGeometry args={[0.6, 24, 18]} />
+          <Mat
+            color="#ffffff"
+            map={saddle}
+            normalMap={saddleNormal}
+            normalStrength={0.25}
+            roughness={0.95}
+          />
+        </mesh>
+        <mesh castShadow position={[0, 0.7, -0.45]} scale={[0.5, 0.5, 0.45]}>
+          <sphereGeometry args={[0.6, 20, 16]} />
+          <Mat color="#1c1c1c" normalMap={furNormal} normalStrength={0.18} />
+        </mesh>
+      </group>
+      <group ref={head}>
+        <mesh castShadow position={[0, 0.78, 0.8]} scale={[0.32, 0.32, 0.36]}>
+          <sphereGeometry args={[0.6, 20, 16]} />
+          <Mat color="#1c1c1c" normalMap={furNormal} normalStrength={0.18} />
+        </mesh>
+        <mesh castShadow position={[0, 0.66, 1.05]} rotation={[1.2, 0, 0]}>
+          <cylinderGeometry args={[0.05, 0.08, 0.3, 6]} />
+          <Mat color="#1c1c1c" />
+        </mesh>
+        {[-1, 1].map((side) => (
+          <group key={side}>
+            <mesh
+              castShadow
+              position={[side * 0.16, 1.02, 0.62]}
+              rotation={[0.15, 0, side * -0.24]}
+            >
+              <coneGeometry args={[0.1, 0.26, 10]} />
+              <Mat color="#171918" />
+            </mesh>
+            <mesh position={[side * 0.25, 0.86, 0.76]}>
+              <sphereGeometry args={[0.038, 12, 10]} />
+              <Mat color="#090b0b" />
+            </mesh>
+            <mesh position={[side * 0.267, 0.872, 0.779]}>
+              <sphereGeometry args={[0.01, 8, 6]} />
+              <Mat color="#e4dfcf" />
+            </mesh>
+            <mesh position={[side * 0.055, 0.64, 1.18]} rotation={[1.2, 0, 0]}>
+              <sphereGeometry args={[0.018, 8, 6]} />
+              <Mat color="#070909" />
+            </mesh>
+          </group>
+        ))}
+      </group>
       <group ref={legs}>
         {[
           [-0.18, 0.4],
@@ -164,6 +198,7 @@ function Tapir(p: ActorProps) {
 function MonitorLizard(p: ActorProps) {
   const body = useRef<THREE.Group>(null);
   const scales = useSurfaceMap("/textures/kaiju-scales.webp");
+  const scaleNormal = useNormalMap("/textures/kaiju-scales.normal.webp");
   useFrame(() => {
     const t = p.getT();
     if (body.current) body.current.rotation.y = Math.sin(t * 5) * 0.18;
@@ -173,11 +208,23 @@ function MonitorLizard(p: ActorProps) {
       <group ref={body}>
         <mesh castShadow position={[0, 0.25, 0]} scale={[0.35, 0.22, 1]}>
           <sphereGeometry args={[0.6, 24, 16]} />
-          <Mat color="#c4c99b" map={scales} roughness={0.88} />
+          <Mat
+            color="#c4c99b"
+            map={scales}
+            normalMap={scaleNormal}
+            normalStrength={0.35}
+            roughness={0.88}
+          />
         </mesh>
         <mesh castShadow position={[0, 0.3, 0.75]} scale={[0.18, 0.14, 0.32]}>
           <sphereGeometry args={[0.6, 18, 14]} />
-          <Mat color="#c4c99b" map={scales} roughness={0.88} />
+          <Mat
+            color="#c4c99b"
+            map={scales}
+            normalMap={scaleNormal}
+            normalStrength={0.35}
+            roughness={0.88}
+          />
         </mesh>
         {[-1, 1].map((side) => (
           <group key={side}>
@@ -201,7 +248,13 @@ function MonitorLizard(p: ActorProps) {
         </mesh>
         <mesh castShadow position={[0, 0.2, -1]} rotation={[-Math.PI / 2 + 0.1, 0, 0]}>
           <coneGeometry args={[0.12, 1.1, 6]} />
-          <Mat color="#bec595" map={scales} roughness={0.9} />
+          <Mat
+            color="#bec595"
+            map={scales}
+            normalMap={scaleNormal}
+            normalStrength={0.35}
+            roughness={0.9}
+          />
         </mesh>
         {Array.from({ length: 9 }, (_, k) => (
           <mesh key={k} position={[0, 0.42, 0.48 - k * 0.12]} scale={[0.065, 0.035, 0.055]}>
@@ -217,7 +270,13 @@ function MonitorLizard(p: ActorProps) {
         ].map(([x, z], i) => (
           <mesh key={i} castShadow position={[x, 0.1, z]} rotation={[0, 0, x > 0 ? -0.8 : 0.8]}>
             <capsuleGeometry args={[0.045, 0.17, 4, 8]} />
-            <Mat color="#bfc696" map={scales} roughness={0.9} />
+            <Mat
+              color="#bfc696"
+              map={scales}
+              normalMap={scaleNormal}
+              normalStrength={0.35}
+              roughness={0.9}
+            />
           </mesh>
         ))}
       </group>
@@ -229,7 +288,9 @@ function MonitorLizard(p: ActorProps) {
 function Hornbill({ a, focus, getT, impact }: ActorProps) {
   const ref = useRef<THREE.Group>(null);
   const wings = useRef<THREE.Group>(null);
+  const tail = useRef<THREE.Group>(null);
   const feathers = useSurfaceMap("/textures/hornbill-feather.webp");
+  const featherNormal = useNormalMap("/textures/hornbill-feather.normal.webp");
   const s = 0.6 + a.size * 0.25;
   useFrame(() => {
     const t = getT();
@@ -240,20 +301,41 @@ function Hornbill({ a, focus, getT, impact }: ActorProps) {
     const y = t < impact ? 7 - 4 * ease(t / impact) : 3 + (t - impact) * 0.8;
     g.position.set(focus.x + Math.cos(ang) * r, y, focus.z + Math.sin(ang) * r);
     g.rotation.y = -ang;
+    g.rotation.z = Math.sin(t * 1.2) * 0.12;
+    g.rotation.x = t < impact ? -0.12 * (1 - t / impact) : Math.sin(t * 1.4) * 0.04;
     g.scale.setScalar(s);
-    wings.current?.children.forEach(
-      (w, i) => (w.rotation.z = (i ? -1 : 1) * Math.sin(t * 9) * 0.6),
-    );
+    wings.current?.children.forEach((w, i) => {
+      w.rotation.z = (i ? -1 : 1) * (0.15 + Math.sin(t * 9) * 0.52);
+      w.rotation.x = Math.sin(t * 9 + 0.8) * 0.08;
+    });
+    tail.current?.children.forEach((feather, i) => {
+      const spread = (i - 1.5) * 0.08;
+      feather.rotation.y = spread + Math.sin(t * 3) * 0.03;
+    });
   });
   return (
     <group ref={ref}>
       <mesh castShadow scale={[0.25, 0.25, 0.6]}>
         <sphereGeometry args={[0.6, 24, 18]} />
-        <Mat color="#ffffff" map={feathers} roughness={0.52} metalness={0.04} />
+        <Mat
+          color="#ffffff"
+          map={feathers}
+          normalMap={featherNormal}
+          normalStrength={0.2}
+          roughness={0.52}
+          metalness={0.04}
+        />
       </mesh>
       <mesh castShadow position={[0, 0.09, 0.29]} scale={[0.2, 0.19, 0.2]}>
         <sphereGeometry args={[0.6, 20, 16]} />
-        <Mat color="#ffffff" map={feathers} roughness={0.5} metalness={0.04} />
+        <Mat
+          color="#ffffff"
+          map={feathers}
+          normalMap={featherNormal}
+          normalStrength={0.2}
+          roughness={0.5}
+          metalness={0.04}
+        />
       </mesh>
       <mesh position={[0, 0.05, 0.42]} rotation={[Math.PI / 2, 0, 0]}>
         <coneGeometry args={[0.095, 0.42, 10]} />
@@ -287,18 +369,27 @@ function Hornbill({ a, focus, getT, impact }: ActorProps) {
           </mesh>
         </group>
       ))}
-      {[-0.12, -0.04, 0.04, 0.12].map((x) => (
-        <mesh key={x} castShadow position={[x, -0.05, -0.58]} rotation={[0, 0, x * 1.5]}>
-          <boxGeometry args={[0.035, 0.018, 0.28]} />
-          <Mat color={x === 0 ? "#17191a" : "#f1efe7"} />
-        </mesh>
-      ))}
+      <group ref={tail}>
+        {[-0.12, -0.04, 0.04, 0.12].map((x) => (
+          <mesh key={x} castShadow position={[x, -0.05, -0.58]} rotation={[0, 0, x * 1.5]}>
+            <boxGeometry args={[0.035, 0.018, 0.28]} />
+            <Mat color={x === 0 ? "#17191a" : "#f1efe7"} />
+          </mesh>
+        ))}
+      </group>
       <group ref={wings}>
         {[-1, 1].map((sgn) => (
           <group key={sgn} position={[sgn * 0.12, 0.04, -0.02]}>
             <mesh castShadow position={[sgn * 0.34, 0, 0]} scale={[1, 0.08, 1]}>
               <sphereGeometry args={[0.35, 18, 12]} />
-              <Mat color="#ffffff" map={feathers} roughness={0.52} metalness={0.04} />
+              <Mat
+                color="#ffffff"
+                map={feathers}
+                normalMap={featherNormal}
+                normalStrength={0.25}
+                roughness={0.52}
+                metalness={0.04}
+              />
             </mesh>
             {Array.from({ length: 6 }, (_, k) => (
               <mesh
@@ -309,7 +400,13 @@ function Hornbill({ a, focus, getT, impact }: ActorProps) {
                 scale={[1, 0.08, 1]}
               >
                 <sphereGeometry args={[0.14, 12, 8]} />
-                <Mat color="#ffffff" map={feathers} roughness={0.54} />
+                <Mat
+                  color="#ffffff"
+                  map={feathers}
+                  normalMap={featherNormal}
+                  normalStrength={0.25}
+                  roughness={0.54}
+                />
               </mesh>
             ))}
           </group>
@@ -322,11 +419,44 @@ function Hornbill({ a, focus, getT, impact }: ActorProps) {
 /** A giant durian: falls, thuds, and splits open. */
 function Durian(p: ActorProps) {
   const halves = useRef<THREE.Group>(null);
+  const pulp = useRef<THREE.InstancedMesh>(null);
   const rind = useSurfaceMap("/textures/durian-rind.webp");
+  const rindNormal = useNormalMap("/textures/durian-rind.normal.webp");
+  const droplets = useMemo(
+    () =>
+      Array.from({ length: 18 }, (_, i) => ({
+        angle: detail(p.seed, i, 241) * Math.PI * 2,
+        speed: 0.35 + detail(p.seed, i, 251) * 0.65,
+        lift: 0.7 + detail(p.seed, i, 257) * 0.65,
+        delay: detail(p.seed, i, 263) * 0.28,
+        size: 0.012 + detail(p.seed, i, 269) * 0.018,
+      })),
+    [p.seed],
+  );
   useFrame(() => {
     const since = p.getT() - p.impact;
-    const open = since > 0.4 ? Math.min(0.7, (since - 0.4) * 1.2) : 0;
-    halves.current?.children.forEach((h, i) => (h.rotation.z = (i ? 1 : -1) * open));
+    const open = since > 0.3 ? Math.min(0.78, (since - 0.3) * 1.1) : 0;
+    const wobble =
+      since > 0.3 ? Math.exp(-(since - 0.3) * 2.4) * Math.sin((since - 0.3) * 18) * 0.11 : 0;
+    halves.current?.children.forEach((h, i) => {
+      const side = i ? 1 : -1;
+      h.rotation.z = side * (open + wobble);
+      h.position.x = side * (0.02 + open * 0.12);
+    });
+    const m = pulp.current;
+    if (!m) return;
+    droplets.forEach((drop, i) => {
+      const t = since - 0.35 - drop.delay;
+      const y = 0.18 + drop.lift * t - 0.75 * t * t;
+      if (t < 0 || t > 2.4 || y < 0) {
+        m.setMatrixAt(i, HIDDEN);
+        return;
+      }
+      tmpP.set(Math.cos(drop.angle) * drop.speed * t, y, Math.sin(drop.angle) * drop.speed * t);
+      tmpM.compose(tmpP, tmpQ.identity(), tmpS.setScalar(drop.size * (1 - t / 2.4)));
+      m.setMatrixAt(i, tmpM);
+    });
+    m.instanceMatrix.needsUpdate = true;
   });
   const spikes = useMemo(
     () =>
@@ -348,7 +478,13 @@ function Durian(p: ActorProps) {
             <group position={[0, 0.5, 0]}>
               <mesh castShadow>
                 <sphereGeometry args={[0.5, 24, 18, side > 0 ? 0 : Math.PI, Math.PI]} />
-                <Mat color="#ffffff" map={rind} roughness={0.92} />
+                <Mat
+                  color="#ffffff"
+                  map={rind}
+                  normalMap={rindNormal}
+                  normalStrength={0.55}
+                  roughness={0.92}
+                />
               </mesh>
               {spikes
                 .filter((sp) => (side > 0 ? sp.v.x >= 0 : sp.v.x < 0))
@@ -366,6 +502,14 @@ function Durian(p: ActorProps) {
           </group>
         ))}
       </group>
+      <instancedMesh
+        ref={pulp}
+        args={[undefined, undefined, droplets.length]}
+        frustumCulled={false}
+      >
+        <sphereGeometry args={[1, 8, 6]} />
+        <meshStandardMaterial color="#f7cf71" roughness={0.28} transparent opacity={0.8} />
+      </instancedMesh>
     </Faller>
   );
 }

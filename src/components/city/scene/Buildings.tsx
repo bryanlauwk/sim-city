@@ -31,9 +31,11 @@ export function facing(grid: Tile[], i: number): number {
  * Facade shader: window grids in world space so they stay regular however a
  * part is stretched, and a scattering of lit windows at night.
  */
-function facadeMaterial(kind: KitMat, map?: THREE.Texture) {
+function facadeMaterial(kind: KitMat, map?: THREE.Texture, normalMap?: THREE.Texture) {
   const m = new THREE.MeshStandardMaterial({
     map,
+    normalMap,
+    normalScale: new THREE.Vector2(0.18, 0.18),
     flatShading: false,
     roughness: kind === "glass" ? 0.25 : 0.85,
     metalness: kind === "glass" ? 0.1 : 0,
@@ -141,28 +143,36 @@ export function KitBuildings({ grid }: { grid: Tile[] }) {
       for (const p of l.parts) c[`${p.geo}-${p.mat}`] = (c[`${p.geo}-${p.mat}`] ?? 0) + 1;
     return c;
   }, [lots]);
-  const [glassMap, plasterMap] = useLoader(THREE.TextureLoader, [
+  const [glassMap, plasterMap, plasterNormal] = useLoader(THREE.TextureLoader, [
     "/textures/curtain-glass.webp",
     "/textures/heritage-plaster.webp",
+    "/textures/heritage-plaster.normal.webp",
   ]);
   useMemo(() => {
+    plasterNormal.colorSpace = THREE.NoColorSpace;
     for (const texture of [glassMap, plasterMap]) {
       texture.colorSpace = THREE.SRGBColorSpace;
+    }
+    for (const texture of [glassMap, plasterMap, plasterNormal]) {
       texture.wrapS = THREE.RepeatWrapping;
       texture.wrapT = THREE.RepeatWrapping;
       texture.anisotropy = 8;
       texture.needsUpdate = true;
     }
-  }, [glassMap, plasterMap]);
+  }, [glassMap, plasterMap, plasterNormal]);
   const mats = useMemo(
     () =>
       Object.fromEntries(
         MATS.map((k) => [
           k,
-          facadeMaterial(k, k === "glass" ? glassMap : k === "solid" ? plasterMap : undefined),
+          facadeMaterial(
+            k,
+            k === "glass" ? glassMap : k === "solid" ? plasterMap : undefined,
+            k === "solid" ? plasterNormal : undefined,
+          ),
         ]),
       ) as unknown as Record<KitMat, THREE.Material>,
-    [glassMap, plasterMap],
+    [glassMap, plasterMap, plasterNormal],
   );
   const geos = useMemo(
     () => ({
@@ -285,20 +295,30 @@ export function LocalHouses({ grid }: { grid: Tile[] }) {
     });
     return out;
   }, [grid]);
-  const [plasterMap, woodMap, roofMap] = useLoader(THREE.TextureLoader, [
-    "/textures/heritage-plaster.webp",
-    "/textures/kampung-wood.webp",
-    "/textures/terracotta-roof.webp",
-  ]);
+  const [plasterMap, woodMap, roofMap, plasterNormal, woodNormal, roofNormal] = useLoader(
+    THREE.TextureLoader,
+    [
+      "/textures/heritage-plaster.webp",
+      "/textures/kampung-wood.webp",
+      "/textures/terracotta-roof.webp",
+      "/textures/heritage-plaster.normal.webp",
+      "/textures/kampung-wood.normal.webp",
+      "/textures/terracotta-roof.normal.webp",
+    ],
+  );
   useMemo(() => {
+    for (const texture of [plasterNormal, woodNormal, roofNormal])
+      texture.colorSpace = THREE.NoColorSpace;
     for (const texture of [plasterMap, woodMap, roofMap]) {
       texture.colorSpace = THREE.SRGBColorSpace;
+    }
+    for (const texture of [plasterMap, woodMap, roofMap, plasterNormal, woodNormal, roofNormal]) {
       texture.wrapS = THREE.RepeatWrapping;
       texture.wrapT = THREE.RepeatWrapping;
       texture.anisotropy = 8;
       texture.needsUpdate = true;
     }
-  }, [plasterMap, woodMap, roofMap]);
+  }, [plasterMap, woodMap, roofMap, plasterNormal, woodNormal, roofNormal]);
 
   const shopBody = useRef<THREE.InstancedMesh>(null);
   const shopRoof = useRef<THREE.InstancedMesh>(null);
@@ -419,7 +439,12 @@ export function LocalHouses({ grid }: { grid: Tile[] }) {
         frustumCulled={false}
       >
         <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial map={plasterMap} roughness={0.88} />
+        <meshStandardMaterial
+          map={plasterMap}
+          normalMap={plasterNormal}
+          normalScale={new THREE.Vector2(0.22, 0.22)}
+          roughness={0.88}
+        />
       </instancedMesh>
       <instancedMesh
         key={`sr${cap}`}
@@ -429,7 +454,13 @@ export function LocalHouses({ grid }: { grid: Tile[] }) {
         frustumCulled={false}
       >
         <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial map={roofMap} color="#ffffff" roughness={0.9} />
+        <meshStandardMaterial
+          map={roofMap}
+          normalMap={roofNormal}
+          normalScale={new THREE.Vector2(0.3, 0.3)}
+          color="#ffffff"
+          roughness={0.9}
+        />
       </instancedMesh>
       <instancedMesh
         key={`sa${cap}`}
@@ -447,7 +478,13 @@ export function LocalHouses({ grid }: { grid: Tile[] }) {
         frustumCulled={false}
       >
         <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial map={woodMap} color="#493725" roughness={0.92} />
+        <meshStandardMaterial
+          map={woodMap}
+          normalMap={woodNormal}
+          normalScale={new THREE.Vector2(0.24, 0.24)}
+          color="#493725"
+          roughness={0.92}
+        />
       </instancedMesh>
       <instancedMesh
         key={`kb${cap}`}
@@ -457,7 +494,13 @@ export function LocalHouses({ grid }: { grid: Tile[] }) {
         frustumCulled={false}
       >
         <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial map={woodMap} color="#ffffff" roughness={0.88} />
+        <meshStandardMaterial
+          map={woodMap}
+          normalMap={woodNormal}
+          normalScale={new THREE.Vector2(0.24, 0.24)}
+          color="#ffffff"
+          roughness={0.88}
+        />
       </instancedMesh>
       <instancedMesh
         key={`kr${cap}`}
@@ -467,7 +510,13 @@ export function LocalHouses({ grid }: { grid: Tile[] }) {
         frustumCulled={false}
       >
         <coneGeometry args={[0.72, 1, 4]} />
-        <meshStandardMaterial map={roofMap} color="#ffffff" roughness={0.9} />
+        <meshStandardMaterial
+          map={roofMap}
+          normalMap={roofNormal}
+          normalScale={new THREE.Vector2(0.3, 0.3)}
+          color="#ffffff"
+          roughness={0.9}
+        />
       </instancedMesh>
     </group>
   );
