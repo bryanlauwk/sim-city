@@ -1,5 +1,6 @@
 import { Component, Suspense, useEffect, useMemo, useRef } from "react";
 import { useGLTF } from "@react-three/drei";
+import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type {
@@ -25,6 +26,7 @@ import {
   type ActorProps,
 } from "./actorParts";
 import { ACTOR_LIBRARY, LIBRARY_IMPACT } from "./ActorLibrary";
+import { withSpecGloss } from "./specGloss";
 
 export { AFTERMATH };
 export interface SpectacleRun {
@@ -1197,20 +1199,36 @@ function normalise(o: THREE.Object3D) {
   o.position.set(-centre.x * k, -box.min.y * k, -centre.z * k);
 }
 
-/** A ready-made model keeps its own colours; it just learns to cast shadows. */
+/**
+ * A ready-made model, kept as authored with its own PBR materials and sized
+ * to the actor. Animated models play their first clip on a loop.
+ */
 function ModelMesh({ url }: { url: string }) {
-  const { scene } = useGLTF(url);
+  const { scene, animations } = useGLTF(url, true, true, withSpecGloss);
   const object = useMemo(() => {
-    const o = scene.clone(true);
+    // SkeletonUtils keeps skinned (animated) meshes bound to their own bones.
+    const o = cloneSkinned(scene);
     o.traverse((c) => {
       const m = c as THREE.Mesh;
       if (!m.isMesh) return;
       m.castShadow = true;
       m.receiveShadow = true;
+      // Skinned meshes move away from their bind-pose bounds.
+      if ((m as THREE.SkinnedMesh).isSkinnedMesh) m.frustumCulled = false;
     });
     normalise(o);
     return o;
   }, [scene]);
+  const mixer = useMemo(
+    () => (animations.length ? new THREE.AnimationMixer(object) : null),
+    [object, animations],
+  );
+  useEffect(() => {
+    if (!mixer) return;
+    mixer.clipAction(animations[0]).play();
+    return () => void mixer.stopAllAction();
+  }, [mixer, animations]);
+  useFrame((_, dt) => mixer?.update(Math.min(dt, 0.05)));
   return <primitive object={object} />;
 }
 
