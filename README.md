@@ -50,25 +50,31 @@ Events need an Anthropic API key, which stays on the server (a TanStack Start se
 
 Without a key the game still runs, but typed events show a "newsroom is closed" message.
 
-## Optional: new actors on demand (Meshy + Supabase)
+## New actors on demand (free, no keys)
 
-When an event names something the built-in library can't show ("a giant teh tarik"), Claude picks a stand-in actor and also names a `model_key` and a `model_prompt`. The server then:
+When an event names something the built-in library can't show ("a giant durian lands on Lot 10"), Claude picks a stand-in actor and also returns, in the same reply:
 
-1. **Looks it up** in a shared Supabase library. If the model is ready, every player gets it instantly.
-2. **Generates it if it's new**, within the caps: it starts a Meshy text-to-3D task (an untextured low-poly preview, which the game colours in its own style) while the event plays with the stand-in.
-3. **Keeps it for everyone.** The client polls while the model is sculpted. When Meshy finishes, the GLB is copied into Supabase Storage (Meshy's links expire) and swaps into the scene with a "fresh from the studio" flourish.
+- `search_terms`: the thing's everyday name ("durian", "double decker bus").
+- a **recipe**: its own design of the thing from 10–40 primitives, with a motion (fall, walk, hover, spin).
 
-Setup:
+The recipe appears at once. Meanwhile the browser looks for a **ready-made model** in a free library, with no API key or account:
 
-1. Create a Meshy account and API key at [meshy.ai](https://www.meshy.ai), with credits.
-2. In a Supabase project, run [`supabase/actor_library.sql`](supabase/actor_library.sql) in the SQL editor. It creates the `actor_library` table and a public `actors` storage bucket.
-3. Add these secrets (Lovable → Secrets):
-   - `MESHY_API_KEY`
+1. [`public/objaverse/index-v1.json.gz`](public/objaverse) lists about 47,000 CC BY and CC0 models from [Objaverse](https://huggingface.co/datasets/allenai/objaverse), a public mirror of downloadable Sketchfab models on Hugging Face. They're filtered with the [Objaverse++](https://huggingface.co/datasets/cindyxl/ObjaversePlusPlus) quality labels for single, well-made objects, with realistic and scanned models ranked first. The 2.3 MB index is fetched once, while the newsroom writes the first event.
+2. The search ranks names against the terms. The main noun must match, so "monitor lizard" never returns a computer monitor, and skulls, toys and statues are ranked below the real thing.
+3. One batched Hugging Face request checks file sizes (up to 8 MB, or 4 MB on phones). The GLB then loads straight from Hugging Face's CDN with its own PBR materials, replacing the recipe. If nothing fits or the download fails, the recipe stays.
+4. The Gazette credits each model's author and licence, linked to its Sketchfab page.
+
+To rebuild the index (it downloads ~820 MB of public metadata and needs no account), run `python3 scripts/build_objaverse_index.py`.
+
+### Optional: shared recipes (Supabase)
+
+With Supabase configured, the first recipe for each `model_key` is saved and reused, so every visitor sees the same teh tarik, and Claude is shown the saved keys so it reuses them.
+
+1. In a Supabase project, run [`supabase/actor_library.sql`](supabase/actor_library.sql) in the SQL editor.
+2. Add these secrets (Lovable → Secrets):
    - `SUPABASE_URL`
    - `SUPABASE_SERVICE_ROLE_KEY` (server-only)
-   - optionally `MESHY_DAILY_CAP` (default 20 new models a day) and `MESHY_PER_VISITOR_CAP` (default 2 per visitor a day)
-
-Without these secrets, custom actors fall back to their built-in stand-ins.
+   - optionally `LIBRARY_PER_VISITOR_CAP` (default: 10 new recipes per visitor a day)
 
 ## Surface map pipeline
 
@@ -82,8 +88,9 @@ The source surface images are in `public/textures`. The nine `.normal.webp` maps
 | `src/lib/city/simulation.ts`          | Deterministic sim: growth, sprawl, redevelopment, events, chain reactions, replay           |
 | `src/lib/city/schema.ts`              | Zod validation and clamping of event results, plus the JSON schema sent to Claude           |
 | `src/lib/city/newsroom.server.ts`     | Server-only Claude call (structured output, refusal fallback)                               |
-| `src/lib/city/simulate.functions.ts`  | Server functions the page calls (events, studio polling), with per-IP throttles             |
-| `src/lib/city/actorLibrary.server.ts` | Shared generated-actor library: Supabase lookups, caps, Meshy tasks, re-hosting             |
+| `src/lib/city/simulate.functions.ts`  | Server function the page calls for events, with a per-IP throttle                           |
+| `src/lib/city/actorLibrary.server.ts` | Optional shared library of Claude's actor recipes (Supabase)                                |
+| `src/lib/city/modelSearch.ts`         | Free model search in the browser: static Objaverse index, Hub size check, credits           |
 | `src/lib/city/persistence.ts`         | localStorage save, credits, share-link encoding                                             |
 | `src/components/city/CityScene.tsx`   | three.js / react-three-fiber scene and camera director                                      |
 | `src/components/city/scene/*`         | Instanced buildings, ground and trees, rail, street life, sky and weather, event spectacles |
@@ -94,7 +101,9 @@ Run `npm run test` (uses Bun) for the simulation tests.
 
 ## Credits
 
-Everything in the city is generated in code: buildings, landmarks, trees, vehicles, people and effects. There are no third-party 3D models.
+The city itself is generated in code: buildings, landmarks, trees, vehicles, people and effects.
+
+Ready-made models for custom actors come from [Objaverse](https://huggingface.co/datasets/allenai/objaverse) (ODC-BY; Deitke et al., 2023), selected with [Objaverse++](https://huggingface.co/datasets/cindyxl/ObjaversePlusPlus) labels (ODC-BY). Each model keeps its own CC BY or CC0 licence, and its author is credited in the Gazette whenever it appears.
 
 ## Build with Lovable
 

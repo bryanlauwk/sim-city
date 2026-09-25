@@ -4,9 +4,8 @@ ANTHROPIC_API_KEY="sk-ant-..."
 # Optional: override the model used for events (default claude-opus-5)
 # CITY_MODEL="claude-sonnet-5"
 
-# Optional: on-demand actors generated with Meshy and shared through Supabase
-# MESHY_API_KEY="msy_..."
+# Optional: keep Claude's custom-actor recipes in a shared Supabase library.
+# (Ready-made models need no configuration: they come from a free index.)
 # SUPABASE_URL="https://your-project.supabase.co"
 # SUPABASE_SERVICE_ROLE_KEY="..."
-# MESHY_DAILY_CAP="20"
-# MESHY_PER_VISITOR_CAP="2"
+# LIBRARY_PER_VISITOR_CAP="10"

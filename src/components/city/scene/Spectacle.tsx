@@ -1,8 +1,17 @@
-import { Suspense, useEffect, useMemo, useRef } from "react";
+import { Component, Suspense, useEffect, useMemo, useRef } from "react";
 import { useGLTF } from "@react-three/drei";
+import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import type { Actor, ActorKind, ActorShape, CrowdReaction, Responder } from "@/lib/city/types";
+import type {
+  Actor,
+  ActorKind,
+  ActorShape,
+  CrowdReaction,
+  Recipe,
+  RecipeShape,
+  Responder,
+} from "@/lib/city/types";
 import { hash, type WorldBus } from "./common";
 
 import {
@@ -17,6 +26,7 @@ import {
   type ActorProps,
 } from "./actorParts";
 import { ACTOR_LIBRARY, LIBRARY_IMPACT } from "./ActorLibrary";
+import { withSpecGloss } from "./specGloss";
 
 export { AFTERMATH };
 export interface SpectacleRun {
@@ -26,8 +36,6 @@ export interface SpectacleRun {
   responders: Responder[];
   focus: { x: number; z: number };
   radius: number;
-  /** An encore for a model that just finished generating. */
-  fresh?: boolean;
 }
 
 /** Seconds after start when each kind of actor makes contact. */
@@ -1166,7 +1174,9 @@ function ImpactBurst({
 }
 
 // ---------------------------------------------------------------------------
-// Shared imported actor models keep their source PBR maps and materials.
+// Custom actors: a ready-made model (kept exactly as authored, with its own
+// PBR materials) or Claude's own recipe of primitives. Both move like their
+// built-in stand-in.
 // ---------------------------------------------------------------------------
 
 const WALKERS = new Set<ActorKind>(["kaiju", "creature", "tapir", "monitor_lizard", "lion_dance"]);
@@ -1179,42 +1189,103 @@ const FLYERS = new Set<ActorKind>([
   "fireworks",
 ]);
 
-function GeneratedMesh({ url, color }: { url: string; color: string }) {
-  const { scene } = useGLTF(url);
+/** Scale an object to a 1.2-unit footprint, resting on the ground. */
+function normalise(o: THREE.Object3D) {
+  const box = new THREE.Box3().setFromObject(o);
+  const size = box.getSize(new THREE.Vector3());
+  const k = 1.2 / Math.max(size.x, size.y, size.z, 0.001);
+  const centre = box.getCenter(new THREE.Vector3());
+  o.scale.setScalar(k);
+  o.position.set(-centre.x * k, -box.min.y * k, -centre.z * k);
+}
+
+/**
+ * A ready-made model, kept as authored with its own PBR materials and sized
+ * to the actor. Animated models play their first clip on a loop.
+ */
+function ModelMesh({ url }: { url: string }) {
+  const { scene, animations } = useGLTF(url, true, true, withSpecGloss);
   const object = useMemo(() => {
-    const o = scene.clone(true);
-    const tint = new THREE.Color(color);
+    // SkeletonUtils keeps skinned (animated) meshes bound to their own bones.
+    const o = cloneSkinned(scene);
     o.traverse((c) => {
       const m = c as THREE.Mesh;
       if (!m.isMesh) return;
-      const preserve = (source: THREE.Material) => {
-        const next = source.clone();
-        if ("color" in next && (next as THREE.MeshStandardMaterial).color instanceof THREE.Color) {
-          (next as THREE.MeshStandardMaterial).color.multiply(tint);
-        }
-        if (next instanceof THREE.MeshStandardMaterial) {
-          next.roughness = Math.max(0.28, next.roughness);
-          if (next instanceof THREE.MeshPhysicalMaterial)
-            next.clearcoat = Math.max(0.18, next.clearcoat);
-        }
-        return next;
-      };
-      m.material = Array.isArray(m.material)
-        ? m.material.map(preserve)
-        : preserve(m.material ?? new THREE.MeshPhysicalMaterial({ color }));
       m.castShadow = true;
       m.receiveShadow = true;
+      // Skinned meshes move away from their bind-pose bounds.
+      if ((m as THREE.SkinnedMesh).isSkinnedMesh) m.frustumCulled = false;
     });
-    // Normalise to a unit footprint, resting on the ground.
-    const box = new THREE.Box3().setFromObject(o);
-    const size = box.getSize(new THREE.Vector3());
-    const k = 1.2 / Math.max(size.x, size.y, size.z, 0.001);
-    const centre = box.getCenter(new THREE.Vector3());
-    o.scale.setScalar(k);
-    o.position.set(-centre.x * k, -box.min.y * k, -centre.z * k);
+    normalise(o);
     return o;
-  }, [scene, color]);
+  }, [scene]);
+  const mixer = useMemo(
+    () => (animations.length ? new THREE.AnimationMixer(object) : null),
+    [object, animations],
+  );
+  useEffect(() => {
+    if (!mixer) return;
+    mixer.clipAction(animations[0]).play();
+    return () => void mixer.stopAllAction();
+  }, [mixer, animations]);
+  useFrame((_, dt) => mixer?.update(Math.min(dt, 0.05)));
   return <primitive object={object} />;
+}
+
+const RECIPE_GEOMETRY: Record<RecipeShape, () => THREE.BufferGeometry> = {
+  box: () => new THREE.BoxGeometry(1, 1, 1),
+  sphere: () => new THREE.SphereGeometry(0.5, 12, 8),
+  cylinder: () => new THREE.CylinderGeometry(0.5, 0.5, 1, 12),
+  cone: () => new THREE.ConeGeometry(0.5, 1, 12),
+  torus: () => new THREE.TorusGeometry(0.4, 0.1, 8, 20),
+  capsule: () => new THREE.CapsuleGeometry(0.5, 1, 4, 10).scale(1, 0.5, 1),
+};
+
+/** Claude's design, built from primitives in the city's flat-shaded style. */
+function RecipeMesh({ recipe }: { recipe: Recipe }) {
+  const object = useMemo(() => {
+    const root = new THREE.Group();
+    const inner = new THREE.Group();
+    root.add(inner);
+    const geos = new Map<RecipeShape, THREE.BufferGeometry>();
+    const mats = new Map<string, THREE.Material>();
+    const d = THREE.MathUtils.degToRad;
+    for (const p of recipe.parts) {
+      if (!geos.has(p.shape)) geos.set(p.shape, RECIPE_GEOMETRY[p.shape]());
+      if (!mats.has(p.color))
+        mats.set(
+          p.color,
+          new THREE.MeshStandardMaterial({ color: p.color, flatShading: true, roughness: 0.7 }),
+        );
+      const m = new THREE.Mesh(geos.get(p.shape), mats.get(p.color));
+      m.position.set(p.x, p.y, p.z);
+      m.scale.set(p.sx, p.sy, p.sz);
+      m.rotation.set(d(p.rx), d(p.ry), d(p.rz));
+      m.castShadow = true;
+      inner.add(m);
+    }
+    normalise(inner);
+    return root;
+  }, [recipe]);
+  useEffect(
+    () => () =>
+      object.traverse((c) => {
+        const m = c as THREE.Mesh;
+        if (!m.isMesh) return;
+        m.geometry.dispose();
+        (m.material as THREE.Material).dispose();
+      }),
+    [object],
+  );
+  return <primitive object={object} />;
+}
+
+function Spin({ getT, children }: { getT: () => number; children: React.ReactNode }) {
+  const ref = useRef<THREE.Group>(null);
+  useFrame(() => {
+    if (ref.current) ref.current.rotation.y = getT() * 3;
+  });
+  return <group ref={ref}>{children}</group>;
 }
 
 /** Sparkles to announce a model fresh from the studio. */
@@ -1255,15 +1326,52 @@ function Hover({ a, focus, getT, impact, children }: ActorProps & { children: Re
   return <group ref={ref}>{children}</group>;
 }
 
-function GeneratedActor(p: ActorProps & { fresh: boolean }) {
+/** Falls back to the stand-in if a model can't be loaded (gone, bad file, offline). */
+class ModelBoundary extends Component<
+  { fallback: React.ReactNode; children: React.ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch(error: unknown) {
+    console.warn("Custom actor model failed to load", error);
+  }
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
+}
+
+function CustomActor(p: ActorProps) {
+  const { a } = p;
+  const motion = a.recipe?.motion;
+  // Claude's recipe stands in while a ready-made model downloads, and stays
+  // if the download fails.
+  const standIn = a.recipe?.parts.length ? <RecipeMesh recipe={a.recipe} /> : null;
   const body = (
-    <Suspense fallback={null}>
-      <GeneratedMesh url={p.a.model_url!} color={p.a.color} />
-      {p.fresh && <StudioSparkle getT={p.getT} />}
-    </Suspense>
+    <>
+      {a.model_url ? (
+        <ModelBoundary key={a.model_url} fallback={standIn}>
+          <Suspense fallback={standIn}>
+            <ModelMesh url={a.model_url} />
+          </Suspense>
+        </ModelBoundary>
+      ) : (
+        standIn
+      )}
+      {a.fresh && <StudioSparkle getT={p.getT} />}
+    </>
   );
-  if (WALKERS.has(p.a.kind)) return <Stomper {...p}>{body}</Stomper>;
-  if (FLYERS.has(p.a.kind)) return <Hover {...p}>{body}</Hover>;
+  if (motion === "walk" || (!motion && WALKERS.has(a.kind)))
+    return <Stomper {...p}>{body}</Stomper>;
+  if (motion === "hover" || (!motion && FLYERS.has(a.kind))) return <Hover {...p}>{body}</Hover>;
+  if (motion === "spin")
+    return (
+      <Faller {...p}>
+        <Spin getT={p.getT}>{body}</Spin>
+      </Faller>
+    );
   return <Faller {...p}>{body}</Faller>;
 }
 
@@ -1283,9 +1391,9 @@ const HITS_GROUND = new Set<ActorKind>([
 ]);
 
 /** The component that plays one actor. */
-function ActorFor({ p, radius, fresh }: { p: ActorProps; radius: number; fresh: boolean }) {
+function ActorFor({ p, radius }: { p: ActorProps; radius: number }) {
   const { a } = p;
-  if (a.model_url) return <GeneratedActor {...p} fresh={fresh} />;
+  if (a.model_url || a.recipe?.parts.length) return <CustomActor {...p} />;
   switch (a.kind) {
     case "whale":
       return <Whale {...p} />;
@@ -1407,7 +1515,6 @@ export function SpectacleView({
               seed: run.id * 31 + i,
             }}
             radius={run.radius}
-            fresh={!!run.fresh}
           />
         </Suspense>
       ))}

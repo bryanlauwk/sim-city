@@ -40,7 +40,8 @@ import {
 import { districtAt, DISTRICTS } from "@/lib/city/kl";
 import type { SimClock, SpectacleRun } from "@/components/city/CityScene";
 import { hourOf } from "@/components/city/scene/common";
-import { pollActor, simulateEvent } from "@/lib/city/simulate.functions";
+import { simulateEvent } from "@/lib/city/simulate.functions";
+import { applyModels, findModel, warmModelIndex, type FoundModel } from "@/lib/city/modelSearch";
 import {
   GRID_SIZE,
   SCALE_COST,
@@ -245,66 +246,28 @@ function Index() {
     seenBulletins.current = n;
   }, [city]);
 
-  // Generated actors: poll the studio, then give the new model an encore.
-  const polling = useRef(new Set<string>());
-  const runRef = useRef<SpectacleRun | null>(null);
-  runRef.current = run;
-  const watchStudio = useCallback(
-    (actor: Actor, focus: { x: number; z: number }, radius: number) => {
-      const key = actor.model_key;
-      if (!key || actor.model_url || polling.current.has(key)) return;
-      polling.current.add(key);
-      toast(`The studio is sculpting ${actor.label || "something new"}…`, {
-        description: "A stand-in is filling in for now.",
-        duration: 6000,
-      });
-      const started = Date.now();
-      const tick = async () => {
-        let res: Awaited<ReturnType<typeof pollActor>>;
-        try {
-          res = await pollActor({ data: { key } });
-        } catch {
-          res = { status: "pending" };
-        }
-        if (res.status === "ready") {
-          polling.current.delete(key);
-          toast.success(`Fresh from the studio: ${actor.label || key}`, {
-            description: "Saved to the library for everyone.",
-          });
-          const ready: Actor = { ...actor, model_url: res.url };
-          const cur = runRef.current;
-          if (cur && cur.actors.some((a) => a.model_key === key)) {
-            setRun({ ...cur, actors: cur.actors.map((a) => (a.model_key === key ? ready : a)) });
-          } else if (!cur) {
-            setRun({
-              id: ++runId.current,
-              actors: [ready],
-              crowd: "gather",
-              responders: [],
-              focus,
-              radius,
-              fresh: true,
-            });
-          }
-          return;
-        }
-        if (res.status !== "pending" || Date.now() - started > 4 * 60_000) {
-          polling.current.delete(key);
-          return;
-        }
-        setTimeout(tick, 6000);
-      };
-      setTimeout(tick, 8000);
-    },
-    [],
-  );
-
   const commit = useCallback((id: number) => {
     const p = pending.current;
     if (!p || p.id !== id) return;
     pending.current = null;
     setCity(p.next);
     setHolding(false);
+  }, []);
+  // A free model found after the spectacle started: swap it in, and credit
+  // its author on the event's front page.
+  const lateModels = useCallback((id: number, event: string, models: (FoundModel | null)[]) => {
+    if (!models.some(Boolean)) return;
+    setRun((r) => (r && r.id === id ? { ...r, actors: applyModels(r.actors, models) } : r));
+    const credit = (s: CityState): CityState => {
+      const last = s.log[s.log.length - 1];
+      if (!last || last.input !== event) return s;
+      const actors = applyModels(last.result.spectacle.actors, models);
+      const result = { ...last.result, spectacle: { ...last.result.spectacle, actors } };
+      return { ...s, log: [...s.log.slice(0, -1), { ...last, result }] };
+    };
+    const p = pending.current;
+    if (p && p.id === id) p.next = credit(p.next);
+    else setCity((c) => (c ? credit(c) : c));
   }, []);
   const endSpectacle = useCallback((id: number) => {
     setRun((r) => (r && r.id === id ? null : r));
@@ -344,6 +307,9 @@ function Index() {
       return;
     }
     setBusy(true);
+    // The free-model index is only needed for custom actors; fetch it while
+    // the newsroom writes.
+    warmModelIndex();
     try {
       const kinds = countKinds(city.grid);
       const districts: Record<string, number> = {};
@@ -372,6 +338,17 @@ function Index() {
         return;
       }
       const { result, refused } = res;
+      // Free ready-made models for custom actors, looked up in the browser.
+      // Wait briefly so a model can make the entrance; slower ones swap in.
+      const lookups = Promise.all(
+        result.spectacle.actors.map((a) =>
+          a.search_terms && !a.model_url ? findModel(a.search_terms) : null,
+        ),
+      );
+      const early = refused
+        ? null
+        : await Promise.race([lookups, new Promise<null>((r) => setTimeout(() => r(null), 2000))]);
+      if (early) result.spectacle.actors = applyModels(result.spectacle.actors, early);
       adoptShared();
       setDismissedCollapse(false);
       setInput("");
@@ -401,8 +378,13 @@ function Index() {
       });
       // If the 3D scene isn't running (e.g. no WebGL), don't wait for it.
       setTimeout(() => commit(id), 7000);
+      if (!early) void lookups.then((models) => lateModels(id, event, models));
       for (const a of result.spectacle.actors)
-        watchStudio(a, { x: focus.x, z: focus.z }, focus.radius);
+        if (a.fresh)
+          toast.success(`New in the KL library: ${a.label || a.model_key}`, {
+            description: "Designed on the spot by the newsroom, saved for everyone.",
+            duration: 8000,
+          });
     } catch (error) {
       console.error(error);
       toast.error("Couldn't reach the newsroom. Check your connection and try again.");
