@@ -73,9 +73,15 @@ function glowMaterial(color: string, upside: boolean): THREE.MeshStandardMateria
   return m;
 }
 
-function Glow({ color }: { color: string }) {
+/**
+ * The shared glow material for a colour. It's handed to meshes through their
+ * `material` prop rather than a <primitive>: the same material object is on
+ * many meshes, and the dev-mode source tagger would otherwise write its
+ * attribute onto it again for each one (which breaks R3F).
+ */
+function useGlow(color: string) {
   const upside = useContext(UpsideContext);
-  return <primitive object={glowMaterial(color, upside)} attach="material" />;
+  return glowMaterial(color, upside);
 }
 
 type V3 = [number, number, number];
@@ -95,10 +101,17 @@ function Box({
   rot?: V3;
   shadow?: boolean;
 }) {
+  const glowMat = useGlow(color);
   return (
-    <mesh castShadow={shadow} receiveShadow position={p} rotation={rot}>
+    <mesh
+      castShadow={shadow}
+      receiveShadow
+      position={p}
+      rotation={rot}
+      {...(glow ? { material: glowMat } : {})}
+    >
       <boxGeometry args={s} />
-      {glow ? <Glow color={color} /> : <Mat color={color} />}
+      {!glow && <Mat color={color} />}
     </mesh>
   );
 }
@@ -122,10 +135,11 @@ function Cyl({
   glow?: boolean;
   rot?: V3;
 }) {
+  const glowMat = useGlow(color);
   return (
-    <mesh castShadow position={p} rotation={rot}>
+    <mesh castShadow position={p} rotation={rot} {...(glow ? { material: glowMat } : {})}>
       <cylinderGeometry args={[top ?? r, r, h, seg]} />
-      {glow ? <Glow color={color} /> : <Mat color={color} />}
+      {!glow && <Mat color={color} />}
     </mesh>
   );
 }
@@ -373,6 +387,7 @@ function Cinema({ lm }: { lm: Landmark }) {
 
 function TownHall({ lm }: { lm: Landmark }) {
   const h = lm.height;
+  const clockFace = useGlow("#fff6dc");
   return (
     <group>
       <Box p={[0, 0.22, -0.06]} s={[0.84, 0.44, 0.64]} color={lm.color} />
@@ -392,11 +407,11 @@ function TownHall({ lm }: { lm: Landmark }) {
       {[0, Math.PI / 2, Math.PI, -Math.PI / 2].map((a) => (
         <mesh
           key={a}
+          material={clockFace}
           position={[Math.sin(a) * 0.102, 0.44 + (h - 0.44) * 0.62, -0.06 + Math.cos(a) * 0.102]}
           rotation={[0, a, 0]}
         >
           <circleGeometry args={[0.07, 20]} />
-          <Glow color="#fff6dc" />
         </mesh>
       ))}
       <mesh castShadow position={[0, h + 0.02, -0.06]}>
