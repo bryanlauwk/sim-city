@@ -1,4 +1,4 @@
-import { memo, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, PerformanceMonitor } from "@react-three/drei";
 import * as THREE from "three";
@@ -21,6 +21,9 @@ import { TileFx, landmarkLabelSpecs } from "./scene/TileFx";
 import { LabelOverlay, LabelProjector, type LabelRegistry, type LabelSpec } from "./scene/Labels";
 
 export type { SpectacleRun };
+
+// Only downloaded when there's a Google key to use it with.
+const GoogleTiles = lazy(() => import("./scene/GoogleTiles"));
 
 export interface SimClock {
   /** performance.now() of the last daily tick. */
@@ -207,6 +210,12 @@ export interface CitySceneProps {
   /** Bumped when a chain-reaction bulletin fires, for a small tremor. */
   tremor: number;
   showLabels: boolean;
+  /** Google Maps key for the real-city 3D tiles, or null for none. */
+  mapsKey?: string | null;
+  /** Photo mode: Google's Kuala Lumpur instead of the game's city. */
+  photo?: boolean;
+  /** The Google tiles couldn't load (bad key, no billing, offline). */
+  onMapsFail?: () => void;
 }
 
 function CityScene({
@@ -217,6 +226,9 @@ function CityScene({
   onSpectacleDone,
   tremor,
   showLabels,
+  mapsKey = null,
+  photo = false,
+  onMapsFail,
 }: CitySceneProps) {
   const small = typeof window !== "undefined" && window.innerWidth < 640;
   // Post-processing is for larger screens; "?fx=0" turns it off on slow GPUs.
@@ -231,6 +243,23 @@ function CityScene({
     return () => clearTimeout(id);
   }, []);
   const bus = useMemo(createBus, []);
+  // The real city from Google around the map (desktop), or instead of it (photo mode).
+  const [tilesFailed, setTilesFailed] = useState(false);
+  const [tilesReady, setTilesReady] = useState(false);
+  const tilesLoaded = useCallback(() => setTilesReady(true), []);
+  const tiles =
+    !!mapsKey &&
+    !tilesFailed &&
+    (photo || !small) &&
+    typeof window !== "undefined" &&
+    !/[?&]tiles=0\b/.test(window.location.search);
+  const showCity = !(tiles && photo);
+  const mapsFail = useRef(onMapsFail);
+  mapsFail.current = onMapsFail;
+  const tilesFail = useCallback(() => {
+    setTilesFailed(true);
+    mapsFail.current?.();
+  }, []);
   // Real OpenStreetMap buildings on the tiles that still have them.
   const osm = useOsmBuildings();
   const real = useMemo(() => realTiles(city.grid, osm), [city.grid, osm]);
@@ -313,18 +342,25 @@ function CityScene({
         <Suspense fallback={null}>
           <PhotoSky />
         </Suspense>
+        {tiles && mapsKey && (
+          <Suspense fallback={null}>
+            <GoogleTiles apiKey={mapsKey} photo={photo} onFail={tilesFail} onReady={tilesLoaded} />
+          </Suspense>
+        )}
         <Shaker bus={bus}>
-          <Ground grid={city.grid} />
-          <Trees grid={city.grid} />
-          <Crossings grid={city.grid} />
-          <StreetLamps grid={city.grid} />
-          <KLStreetProps grid={city.grid} />
-          {osm && <RealBuildings grid={city.grid} pieces={osm} tiles={real} />}
-          <KitBuildings grid={city.grid} skip={real} />
-          <LocalHouses grid={city.grid} skip={real} />
-          <TileFx grid={city.grid} roofs={realRoofs} />
-          <Rail bus={bus} />
-          <Life city={city} bus={bus} />
+          <group visible={showCity}>
+            <Ground grid={city.grid} backdrop={tiles && tilesReady} />
+            <Trees grid={city.grid} />
+            <Crossings grid={city.grid} />
+            <StreetLamps grid={city.grid} />
+            <KLStreetProps grid={city.grid} />
+            {osm && <RealBuildings grid={city.grid} pieces={osm} tiles={real} />}
+            <KitBuildings grid={city.grid} skip={real} />
+            <LocalHouses grid={city.grid} skip={real} />
+            <TileFx grid={city.grid} roofs={realRoofs} />
+            <Rail bus={bus} />
+            <Life city={city} bus={bus} />
+          </group>
           {spectacle && (
             <SpectacleView
               key={spectacle.id}
@@ -355,7 +391,7 @@ function CityScene({
           />
         )}
       </Canvas>
-      {osm && (
+      {osm && showCity && (
         <a
           href="https://www.openstreetmap.org/copyright"
           target="_blank"

@@ -23,7 +23,7 @@ const tmpM = new THREE.Matrix4();
 const tmpC = new THREE.Color();
 
 /** Every tile's base slab in one draw call. */
-export function Ground({ grid }: { grid: Tile[] }) {
+export function Ground({ grid, backdrop = false }: { grid: Tile[]; backdrop?: boolean }) {
   const land = useRef<THREE.InstancedMesh>(null);
   const roads = useRef<THREE.InstancedMesh>(null);
   const puddles = useRef<THREE.InstancedMesh>(null);
@@ -200,7 +200,8 @@ export function Ground({ grid }: { grid: Tile[] }) {
         <boxGeometry args={[1, 0.08, 1]} />
       </instancedMesh>
       <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.11, 0]}>
-        <planeGeometry args={[160, 160]} />
+        {/* Just the map when the real city surrounds it. */}
+        <planeGeometry args={backdrop ? [32, 32] : [160, 160]} />
         <meshStandardMaterial color="#7fa872" />
       </mesh>
     </group>

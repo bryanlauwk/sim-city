@@ -22,6 +22,7 @@ A living, detailed procedural Kuala Lumpur. You type what happens to it ("a whal
 ## Photoreal rendering
 
 - **Kuala Lumpur's real buildings** (`scene/osmBuildings.ts`, `scene/RealBuildings.tsx`). About 2,200 building footprints from OpenStreetMap, with real heights where OSM records them (The Exchange 106, Four Seasons Place, Menara Ilham…), are clipped to the map's tiles and extruded with the kit's facade shaders: three draw calls for the whole city. About 80% of the starting building tiles show their real buildings. A tile hands over to the procedural kit once something happens to it (destroyed, rebuilt, redeveloped), so the city stays fully destructible. Landmarks keep their hand-built models. Rebuild the data with `python3 scripts/build_osm_buildings.py` (no key needed).
+- **Google's 3D Kuala Lumpur, optional** (`scene/GoogleTiles.tsx`). With a Google Maps key (see below), Google's Photorealistic 3D Tiles stream in around the map, so the game's city sits inside the real one out to the horizon (desktop only). The camera button switches to photo mode: the real city from Google, with the game's city hidden but the events, labels and sky kept (on phones too). The tiles are lined up with the map's projection and dimmed with the game's time of day. Without a key, or if Google refuses it, the game looks as before. `?tiles=0` in the URL turns the tiles off.
 - **A photographed sky** (`scene/PhotoSky.tsx`). Poly Haven's CC0 "Kloofendal 48d Partly Cloudy" HDRI lights the scene, so glass towers and PBR models reflect a real sky. A 2K photo of the same sky is drawn behind the skyline by day and fades into the dusk, storm, haze and night colours.
 - **Film-like finishing on larger screens** (`scene/PostFX.tsx`): ambient occlusion, bloom (stronger at night), ACES tone mapping and a light vignette. If the frame rate drops below about 28 fps, it switches itself off. `?fx=0` in the URL turns it off from the start.
 - **Real models for built-in actors** (`scene/realModels.ts`): a humpback whale, durian, baby tapir, rhinoceros hornbill, Komodo dragon, animated running T-Rex (the kaiju), UFO, hot-air balloon and a scanned asteroid (the meteor's rock, which keeps its fiery trail). They're CC BY models from Objaverse, loaded from Hugging Face when an event needs them and credited in the Gazette. The procedural actor stands in while one loads, and stays if it can't. Phones get only the models under 4 MB.
@@ -85,6 +86,20 @@ With Supabase configured, the first recipe for each `model_key` is saved and reu
    - `SUPABASE_SERVICE_ROLE_KEY` (server-only)
    - optionally `LIBRARY_PER_VISITOR_CAP` (default: 10 new recipes per visitor a day)
 
+## Optional: Google Photorealistic 3D Tiles
+
+1. In [Google Cloud](https://console.cloud.google.com/), in a project with billing turned on, enable the **Map Tiles API**.
+2. Create an API key, then restrict it:
+   - **Application restrictions:** Websites. Add your site's domains, for example `https://your-project.lovable.app/*` and your custom domain.
+   - **API restrictions:** Map Tiles API only.
+3. Add it as the `GOOGLE_MAPS_API_KEY` secret (Lovable → Secrets; for local development, `.dev.vars`).
+
+The browser fetches the tiles itself, so it has to see the key: the restrictions above are what keep it from being used elsewhere. Don't put the key in the code.
+
+**Cost:** each visit opens one tile session (one "root tileset request"), which covers the next three hours of streaming. Google gives 1,000 a month free, then charges about US$6 per 1,000. Set a budget alert or a daily quota on the Map Tiles API in Google Cloud to cap it.
+
+**Google's terms:** Google's logo and the data credits are shown whenever tiles are on screen, and the tiles aren't cached or stored. Keep it that way.
+
 ## Surface map pipeline
 
 The source surface images are in `public/textures`. The nine `.normal.webp` maps add subtle relief without a 3D service or new runtime dependency. If a source image changes, install Pillow and run `python3 scripts/derive_normal_maps.py` to regenerate its normal map.
@@ -98,6 +113,7 @@ The source surface images are in `public/textures`. The nine `.normal.webp` maps
 | `src/lib/city/schema.ts`              | Zod validation and clamping of event results, plus the JSON schema sent to Claude           |
 | `src/lib/city/newsroom.server.ts`     | Server-only Claude call (structured output, refusal fallback)                               |
 | `src/lib/city/simulate.functions.ts`  | Server function the page calls for events, with a per-IP throttle                           |
+| `src/lib/city/maps.functions.ts`      | Hands the browser the Google Maps key for the 3D tiles, if one is set                       |
 | `src/lib/city/actorLibrary.server.ts` | Optional shared library of Claude's actor recipes (Supabase)                                |
 | `src/lib/city/modelSearch.ts`         | Free model search in the browser: static Objaverse index, Hub size check, credits           |
 | `src/lib/city/persistence.ts`         | localStorage save, credits, share-link encoding                                             |
@@ -113,6 +129,8 @@ Run `npm run test` (uses Bun) for the simulation tests.
 The city itself is generated in code: buildings, landmarks, trees, vehicles, people and effects.
 
 Building footprints and heights are © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, under the Open Database License; `public/osm/kl-buildings.json` is offered under the same licence.
+
+With a Google Maps key, the real-city 3D tiles are Google's Photorealistic 3D Tiles, © Google and its data providers, credited on screen as Google requires.
 
 The sky is Poly Haven's [Kloofendal 48d Partly Cloudy (Pure Sky)](https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky) by Greg Zaal and Jarod Guest (CC0).
 
