@@ -1,14 +1,22 @@
 /**
  * The KL actor & effect library: local wildlife, festivals, street life and
- * urban mishaps that Claude can cast in an event. Each actor is built from
- * primitives in the same flat-shaded style as the city.
+ * urban mishaps that Claude can cast in an event. Each actor uses deterministic
+ * procedural geometry, distinct surface maps and animated details.
  */
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { ActorKind } from "@/lib/city/types";
 import { hash } from "./common";
-import { AFTERMATH, Faller, Mat, Stomper, ease, type ActorProps } from "./actorParts";
+import {
+  AFTERMATH,
+  Faller,
+  Mat,
+  Stomper,
+  ease,
+  useSurfaceMap,
+  type ActorProps,
+} from "./actorParts";
 
 type LibraryKind = Extract<
   ActorKind,
@@ -78,6 +86,15 @@ function detailDirection(seed: number, index: number, salt = 0) {
 /** Malayan tapir: black front and back, white saddle, long snout. */
 function Tapir(p: ActorProps) {
   const legs = useRef<THREE.Group>(null);
+  const fur = useSurfaceMap("/textures/tapir-fur.webp");
+  const saddle = useMemo(() => {
+    const texture = fur.clone();
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.repeat.set(1, 0.36);
+    texture.offset.set(0, 0.32);
+    texture.needsUpdate = true;
+    return texture;
+  }, [fur]);
   useFrame(() => {
     const t = p.getT();
     legs.current?.children.forEach(
@@ -87,30 +104,44 @@ function Tapir(p: ActorProps) {
   return (
     <Stomper {...p}>
       <mesh castShadow position={[0, 0.7, 0.38]} scale={[0.5, 0.5, 0.45]}>
-        <sphereGeometry args={[0.6, 10, 8]} />
+        <sphereGeometry args={[0.6, 20, 16]} />
         <Mat color="#1c1c1c" />
       </mesh>
       <mesh castShadow position={[0, 0.72, -0.05]} scale={[0.55, 0.55, 0.5]}>
-        <sphereGeometry args={[0.6, 10, 8]} />
-        <Mat color="#f1efe9" />
+        <sphereGeometry args={[0.6, 24, 18]} />
+        <Mat color="#ffffff" map={saddle} roughness={0.95} />
       </mesh>
       <mesh castShadow position={[0, 0.7, -0.45]} scale={[0.5, 0.5, 0.45]}>
-        <sphereGeometry args={[0.6, 10, 8]} />
+        <sphereGeometry args={[0.6, 20, 16]} />
         <Mat color="#1c1c1c" />
       </mesh>
       <mesh castShadow position={[0, 0.78, 0.8]} scale={[0.32, 0.32, 0.36]}>
-        <sphereGeometry args={[0.6, 8, 6]} />
+        <sphereGeometry args={[0.6, 20, 16]} />
         <Mat color="#1c1c1c" />
       </mesh>
       <mesh castShadow position={[0, 0.66, 1.05]} rotation={[1.2, 0, 0]}>
         <cylinderGeometry args={[0.05, 0.08, 0.3, 6]} />
         <Mat color="#1c1c1c" />
       </mesh>
-      {[-0.1, 0.1].map((x) => (
-        <mesh key={x} position={[x, 0.98, 0.72]}>
-          <sphereGeometry args={[0.05, 6, 5]} />
-          <Mat color="#f1efe9" />
-        </mesh>
+      {[-1, 1].map((side) => (
+        <group key={side}>
+          <mesh castShadow position={[side * 0.16, 1.02, 0.62]} rotation={[0.15, 0, side * -0.24]}>
+            <coneGeometry args={[0.1, 0.26, 10]} />
+            <Mat color="#171918" />
+          </mesh>
+          <mesh position={[side * 0.25, 0.86, 0.76]}>
+            <sphereGeometry args={[0.038, 12, 10]} />
+            <Mat color="#090b0b" />
+          </mesh>
+          <mesh position={[side * 0.267, 0.872, 0.779]}>
+            <sphereGeometry args={[0.01, 8, 6]} />
+            <Mat color="#e4dfcf" />
+          </mesh>
+          <mesh position={[side * 0.055, 0.64, 1.18]} rotation={[1.2, 0, 0]}>
+            <sphereGeometry args={[0.018, 8, 6]} />
+            <Mat color="#070909" />
+          </mesh>
+        </group>
       ))}
       <group ref={legs}>
         {[
@@ -120,8 +151,8 @@ function Tapir(p: ActorProps) {
           [0.18, -0.45],
         ].map(([x, z], i) => (
           <mesh key={i} castShadow position={[x, 0.22, z]}>
-            <cylinderGeometry args={[0.07, 0.07, 0.44, 5]} />
-            <Mat color="#1c1c1c" />
+            <capsuleGeometry args={[0.065, 0.28, 4, 10]} />
+            <Mat color="#20211f" />
           </mesh>
         ))}
       </group>
@@ -132,30 +163,52 @@ function Tapir(p: ActorProps) {
 /** A giant monitor lizard (biawak) ambling out of the river. */
 function MonitorLizard(p: ActorProps) {
   const body = useRef<THREE.Group>(null);
+  const scales = useSurfaceMap("/textures/kaiju-scales.webp");
   useFrame(() => {
     const t = p.getT();
     if (body.current) body.current.rotation.y = Math.sin(t * 5) * 0.18;
   });
-  const c = p.a.color || "#4f5a3a";
   return (
     <Stomper {...p}>
       <group ref={body}>
         <mesh castShadow position={[0, 0.25, 0]} scale={[0.35, 0.22, 1]}>
-          <sphereGeometry args={[0.6, 10, 8]} />
-          <Mat color={c} />
+          <sphereGeometry args={[0.6, 24, 16]} />
+          <Mat color="#c4c99b" map={scales} roughness={0.88} />
         </mesh>
         <mesh castShadow position={[0, 0.3, 0.75]} scale={[0.18, 0.14, 0.32]}>
-          <sphereGeometry args={[0.6, 8, 6]} />
-          <Mat color={c} />
+          <sphereGeometry args={[0.6, 18, 14]} />
+          <Mat color="#c4c99b" map={scales} roughness={0.88} />
         </mesh>
+        {[-1, 1].map((side) => (
+          <group key={side}>
+            <mesh position={[side * 0.15, 0.37, 0.8]}>
+              <sphereGeometry args={[0.035, 10, 8]} />
+              <Mat color="#d6b74c" />
+            </mesh>
+            <mesh position={[side * 0.16, 0.38, 0.826]}>
+              <sphereGeometry args={[0.018, 10, 8]} />
+              <Mat color="#10130f" />
+            </mesh>
+            <mesh position={[side * 0.045, 0.27, 1.03]}>
+              <sphereGeometry args={[0.015, 8, 6]} />
+              <Mat color="#181a16" />
+            </mesh>
+          </group>
+        ))}
         <mesh position={[0, 0.28, 1]} rotation={[Math.PI / 2, 0, 0]}>
           <coneGeometry args={[0.02, 0.2, 4]} />
           <Mat color="#c0392b" />
         </mesh>
         <mesh castShadow position={[0, 0.2, -1]} rotation={[-Math.PI / 2 + 0.1, 0, 0]}>
           <coneGeometry args={[0.12, 1.1, 6]} />
-          <Mat color={c} />
+          <Mat color="#bec595" map={scales} roughness={0.9} />
         </mesh>
+        {Array.from({ length: 9 }, (_, k) => (
+          <mesh key={k} position={[0, 0.42, 0.48 - k * 0.12]} scale={[0.065, 0.035, 0.055]}>
+            <sphereGeometry args={[1, 10, 8]} />
+            <Mat color={k % 2 ? "#b6b67b" : "#d2c47b"} />
+          </mesh>
+        ))}
         {[
           [-0.26, 0.35],
           [0.26, 0.35],
@@ -163,8 +216,8 @@ function MonitorLizard(p: ActorProps) {
           [0.26, -0.3],
         ].map(([x, z], i) => (
           <mesh key={i} castShadow position={[x, 0.1, z]} rotation={[0, 0, x > 0 ? -0.8 : 0.8]}>
-            <cylinderGeometry args={[0.04, 0.04, 0.26, 5]} />
-            <Mat color={c} />
+            <capsuleGeometry args={[0.045, 0.17, 4, 8]} />
+            <Mat color="#bfc696" map={scales} roughness={0.9} />
           </mesh>
         ))}
       </group>
@@ -176,6 +229,7 @@ function MonitorLizard(p: ActorProps) {
 function Hornbill({ a, focus, getT, impact }: ActorProps) {
   const ref = useRef<THREE.Group>(null);
   const wings = useRef<THREE.Group>(null);
+  const feathers = useSurfaceMap("/textures/hornbill-feather.webp");
   const s = 0.6 + a.size * 0.25;
   useFrame(() => {
     const t = getT();
@@ -194,28 +248,70 @@ function Hornbill({ a, focus, getT, impact }: ActorProps) {
   return (
     <group ref={ref}>
       <mesh castShadow scale={[0.25, 0.25, 0.6]}>
-        <sphereGeometry args={[0.6, 8, 6]} />
-        <Mat color="#151515" />
+        <sphereGeometry args={[0.6, 24, 18]} />
+        <Mat color="#ffffff" map={feathers} roughness={0.52} metalness={0.04} />
+      </mesh>
+      <mesh castShadow position={[0, 0.09, 0.29]} scale={[0.2, 0.19, 0.2]}>
+        <sphereGeometry args={[0.6, 20, 16]} />
+        <Mat color="#ffffff" map={feathers} roughness={0.5} metalness={0.04} />
       </mesh>
       <mesh position={[0, 0.05, 0.42]} rotation={[Math.PI / 2, 0, 0]}>
-        <coneGeometry args={[0.07, 0.35, 5]} />
-        <Mat color="#f2c230" />
+        <coneGeometry args={[0.095, 0.42, 10]} />
+        <Mat color="#f1c33c" roughness={0.34} />
       </mesh>
-      <mesh position={[0, 0.14, 0.34]} scale={[0.5, 0.5, 1.4]}>
-        <sphereGeometry args={[0.08, 6, 5]} />
-        <Mat color="#d9442a" />
+      <mesh castShadow position={[0, 0.2, 0.43]} rotation={[0.08, 0, 0]} scale={[0.12, 0.14, 0.27]}>
+        <sphereGeometry args={[1, 18, 12]} />
+        <Mat color="#dc4b29" roughness={0.36} />
       </mesh>
-      <mesh position={[0, -0.02, -0.45]}>
-        <boxGeometry args={[0.18, 0.03, 0.3]} />
-        <Mat color="#f4f1e8" />
-      </mesh>
+      {[-1, 1].map((side) => (
+        <group key={side}>
+          <mesh position={[side * 0.17, 0.11, 0.3]}>
+            <sphereGeometry args={[0.075, 14, 10]} />
+            <Mat color="#e6ba35" roughness={0.38} />
+          </mesh>
+          <mesh position={[side * 0.19, 0.115, 0.34]}>
+            <sphereGeometry args={[0.04, 12, 10]} />
+            <Mat color="#080a0b" />
+          </mesh>
+          <mesh position={[side * 0.195, 0.13, 0.37]}>
+            <sphereGeometry args={[0.011, 8, 6]} />
+            <Mat color="#ffffff" />
+          </mesh>
+          <mesh castShadow position={[side * 0.075, -0.28, 0.05]} rotation={[0, 0, side * -0.08]}>
+            <cylinderGeometry args={[0.018, 0.022, 0.18, 8]} />
+            <Mat color="#e6ba35" />
+          </mesh>
+          <mesh position={[side * 0.075, -0.37, 0.12]}>
+            <boxGeometry args={[0.12, 0.025, 0.09]} />
+            <Mat color="#e6ba35" />
+          </mesh>
+        </group>
+      ))}
+      {[-0.12, -0.04, 0.04, 0.12].map((x) => (
+        <mesh key={x} castShadow position={[x, -0.05, -0.58]} rotation={[0, 0, x * 1.5]}>
+          <boxGeometry args={[0.035, 0.018, 0.28]} />
+          <Mat color={x === 0 ? "#17191a" : "#f1efe7"} />
+        </mesh>
+      ))}
       <group ref={wings}>
         {[-1, 1].map((sgn) => (
-          <group key={sgn} position={[sgn * 0.12, 0.05, 0]}>
-            <mesh position={[sgn * 0.35, 0, 0]}>
-              <boxGeometry args={[0.7, 0.02, 0.3]} />
-              <Mat color="#151515" />
+          <group key={sgn} position={[sgn * 0.12, 0.04, -0.02]}>
+            <mesh castShadow position={[sgn * 0.34, 0, 0]} scale={[1, 0.08, 1]}>
+              <sphereGeometry args={[0.35, 18, 12]} />
+              <Mat color="#ffffff" map={feathers} roughness={0.52} metalness={0.04} />
             </mesh>
+            {Array.from({ length: 6 }, (_, k) => (
+              <mesh
+                key={k}
+                castShadow
+                position={[sgn * (0.22 + k * 0.11), -0.015, -0.08 - k * 0.025]}
+                rotation={[0.02, 0, sgn * 0.05]}
+                scale={[1, 0.08, 1]}
+              >
+                <sphereGeometry args={[0.14, 12, 8]} />
+                <Mat color="#ffffff" map={feathers} roughness={0.54} />
+              </mesh>
+            ))}
           </group>
         ))}
       </group>
@@ -226,6 +322,7 @@ function Hornbill({ a, focus, getT, impact }: ActorProps) {
 /** A giant durian: falls, thuds, and splits open. */
 function Durian(p: ActorProps) {
   const halves = useRef<THREE.Group>(null);
+  const rind = useSurfaceMap("/textures/durian-rind.webp");
   useFrame(() => {
     const since = p.getT() - p.impact;
     const open = since > 0.4 ? Math.min(0.7, (since - 0.4) * 1.2) : 0;
@@ -233,7 +330,7 @@ function Durian(p: ActorProps) {
   });
   const spikes = useMemo(
     () =>
-      Array.from({ length: 26 }, (_, k) => {
+      Array.from({ length: 42 }, (_, k) => {
         const v = detailDirection(p.seed, k, 23);
         return {
           v,
@@ -250,15 +347,15 @@ function Durian(p: ActorProps) {
           <group key={side} position={[side * 0.02, -0.5, 0]}>
             <group position={[0, 0.5, 0]}>
               <mesh castShadow>
-                <sphereGeometry args={[0.5, 10, 8, side > 0 ? 0 : Math.PI, Math.PI]} />
-                <Mat color="#8a9a3a" />
+                <sphereGeometry args={[0.5, 24, 18, side > 0 ? 0 : Math.PI, Math.PI]} />
+                <Mat color="#ffffff" map={rind} roughness={0.92} />
               </mesh>
               {spikes
                 .filter((sp) => (side > 0 ? sp.v.x >= 0 : sp.v.x < 0))
                 .map((sp) => (
                   <mesh key={sp.k} position={sp.v.clone().multiplyScalar(0.5)} quaternion={sp.q}>
-                    <coneGeometry args={[0.06, 0.16, 4]} />
-                    <Mat color="#6f7a2c" />
+                    <coneGeometry args={[0.055, 0.18, 6]} />
+                    <Mat color={sp.k % 6 === 0 ? "#b6a344" : "#707a2f"} roughness={0.9} />
                   </mesh>
                 ))}
               <mesh position={[side * 0.05, 0, 0]} scale={[0.2, 0.7, 0.7]}>
@@ -481,7 +578,7 @@ function Column({
     <>
       <instancedMesh ref={people} args={[undefined, undefined, n]} castShadow frustumCulled={false}>
         <capsuleGeometry args={[0.03, 0.07, 2, 5]} />
-        <meshStandardMaterial flatShading />
+        <meshStandardMaterial roughness={0.86} />
       </instancedMesh>
       <instancedMesh
         ref={extras}
@@ -647,7 +744,7 @@ function Sinkhole({ a, focus, getT, impact, seed }: ActorProps) {
       </mesh>
       <instancedMesh ref={bits} args={[undefined, undefined, chunks.length]} frustumCulled={false}>
         <boxGeometry args={[1, 0.4, 1]} />
-        <meshStandardMaterial color="#4a4a4e" flatShading />
+        <meshStandardMaterial color="#4a4a4e" roughness={0.92} />
       </instancedMesh>
     </>
   );
@@ -697,7 +794,7 @@ function Landslide({ a, focus, getT, impact, seed }: ActorProps) {
       frustumCulled={false}
     >
       <dodecahedronGeometry args={[1, 0]} />
-      <meshStandardMaterial color="#6b4a2b" flatShading />
+      <meshStandardMaterial color="#6b4a2b" roughness={0.94} />
     </instancedMesh>
   );
 }

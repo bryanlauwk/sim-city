@@ -6,6 +6,7 @@ import type { CityState } from "@/lib/city/types";
 import { KitBuildings, LocalHouses } from "./scene/Buildings";
 import { createBus, type WorldBus } from "./scene/common";
 import { Crossings, Ground, StreetLamps, Trees } from "./scene/Ground";
+import { KLStreetProps } from "./scene/KLStreetProps";
 import { Life } from "./scene/Life";
 import { Rail } from "./scene/Rail";
 import { Sky } from "./scene/Sky";
@@ -183,6 +184,7 @@ function CityScene({
           <Trees grid={city.grid} />
           <Crossings grid={city.grid} />
           <StreetLamps grid={city.grid} />
+          <KLStreetProps grid={city.grid} />
           <KitBuildings grid={city.grid} />
           <LocalHouses grid={city.grid} />
           <TileFx grid={city.grid} />

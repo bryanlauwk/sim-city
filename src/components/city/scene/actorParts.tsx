@@ -1,5 +1,5 @@
 import { useMemo, useRef } from "react";
-import { useFrame } from "@react-three/fiber";
+import { useFrame, useLoader } from "@react-three/fiber";
 import * as THREE from "three";
 import type { Actor, ActorShape } from "@/lib/city/types";
 import { hash, type WorldBus } from "./common";
@@ -18,19 +18,39 @@ export interface ActorProps {
 
 export const ease = (x: number) => Math.min(1, Math.max(0, x));
 
+export function useSurfaceMap(url: string) {
+  const texture = useLoader(THREE.TextureLoader, url);
+  useMemo(() => {
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.anisotropy = 8;
+    texture.needsUpdate = true;
+  }, [texture]);
+  return texture;
+}
+
 export function Mat({
   color,
   emissive,
   opacity,
+  map,
+  roughness = 0.68,
+  metalness = 0,
 }: {
   color: string;
   emissive?: string;
   opacity?: number;
+  map?: THREE.Texture;
+  roughness?: number;
+  metalness?: number;
 }) {
   return (
     <meshStandardMaterial
       color={color}
-      flatShading
+      map={map}
+      roughness={roughness}
+      metalness={metalness}
       emissive={emissive ?? "#000000"}
       emissiveIntensity={emissive ? 1.2 : 0}
       transparent={opacity !== undefined}

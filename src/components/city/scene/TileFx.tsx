@@ -4,15 +4,36 @@ import type { LabelSpec } from "./Labels";
 import * as THREE from "three";
 import type { Landmark, Tile } from "@/lib/city/types";
 import { tileX, tileZ } from "./common";
+import { useSurfaceMap } from "./actorParts";
 
-function Mat({ color, metal = 0 }: { color: string; metal?: number }) {
+function Mat({
+  color,
+  metal = 0,
+  map,
+  roughness = 0.58,
+}: {
+  color: string;
+  metal?: number;
+  map?: THREE.Texture;
+  roughness?: number;
+}) {
   // No environment map in the scene, so keep metalness low or surfaces go black.
   return (
-    <meshStandardMaterial color={color} flatShading roughness={0.45} metalness={metal * 0.25} />
+    <meshStandardMaterial color={color} map={map} roughness={roughness} metalness={metal * 0.25} />
   );
 }
 
-function TwinTower({ x, h, color }: { x: number; h: number; color: string }) {
+function TwinTower({
+  x,
+  h,
+  color,
+  map,
+}: {
+  x: number;
+  h: number;
+  color: string;
+  map: THREE.Texture;
+}) {
   const tiers = 6;
   return (
     <group position={[x, 0, 0]}>
@@ -22,13 +43,13 @@ function TwinTower({ x, h, color }: { x: number; h: number; color: string }) {
         return (
           <mesh key={k} castShadow position={[0, segH * (k + 0.5), 0]}>
             <cylinderGeometry args={[r * 0.97, r, segH, 8]} />
-            <Mat color={color} metal={0.55} />
+            <Mat color={color} metal={0.35} map={map} roughness={0.3} />
           </mesh>
         );
       })}
       <mesh castShadow position={[0, h * 0.91, 0]}>
         <coneGeometry args={[0.05, h * 0.18, 6]} />
-        <Mat color={color} metal={0.6} />
+        <Mat color={color} metal={0.45} map={map} roughness={0.32} />
       </mesh>
     </group>
   );
@@ -36,13 +57,16 @@ function TwinTower({ x, h, color }: { x: number; h: number; color: string }) {
 
 export function LandmarkMesh({ lm }: { lm: Landmark }) {
   const h = lm.height;
+  const glass = useSurfaceMap("/textures/curtain-glass.webp");
+  const plaster = useSurfaceMap("/textures/heritage-plaster.webp");
+  const roof = useSurfaceMap("/textures/terracotta-roof.webp");
   const mat = <Mat color={lm.color} />;
   switch (lm.shape) {
     case "twin_towers":
       return (
         <group>
-          <TwinTower x={-0.22} h={h} color={lm.color} />
-          <TwinTower x={0.22} h={h} color={lm.color} />
+          <TwinTower x={-0.22} h={h} color="#ffffff" map={glass} />
+          <TwinTower x={0.22} h={h} color="#ffffff" map={glass} />
           {/* The skybridge on the 41st/42nd floors */}
           <mesh castShadow position={[0, h * 0.42, 0]}>
             <boxGeometry args={[0.3, 0.05, 0.08]} />
@@ -59,7 +83,7 @@ export function LandmarkMesh({ lm }: { lm: Landmark }) {
           </mesh>
           <mesh castShadow position={[0, h * 0.77, 0]} scale={[1, 0.8, 1]}>
             <sphereGeometry args={[0.3, 12, 8]} />
-            <Mat color="#8fb9c9" metal={0.3} />
+            <Mat color="#ffffff" metal={0.2} map={glass} roughness={0.24} />
           </mesh>
           <mesh castShadow position={[0, h * 0.92, 0]}>
             <cylinderGeometry args={[0.01, 0.02, h * 0.22, 4]} />
@@ -72,7 +96,7 @@ export function LandmarkMesh({ lm }: { lm: Landmark }) {
         <group>
           <mesh castShadow position={[0, h * 0.42, 0]}>
             <cylinderGeometry args={[0.1, 0.32, h * 0.84, 6]} />
-            <Mat color={lm.color} metal={0.5} />
+            <Mat color="#ffffff" metal={0.25} map={glass} roughness={0.28} />
           </mesh>
           <mesh castShadow position={[0, h * 0.92, 0]}>
             <coneGeometry args={[0.05, h * 0.18, 6]} />
@@ -85,7 +109,7 @@ export function LandmarkMesh({ lm }: { lm: Landmark }) {
         <group scale={Math.max(0.7, h)}>
           <mesh castShadow position={[0, 0.12, 0]}>
             <boxGeometry args={[0.6, 0.24, 0.6]} />
-            <Mat color="#f1ece2" />
+            <Mat color="#ffffff" map={plaster} />
           </mesh>
           <mesh castShadow position={[0, 0.24, 0]}>
             <sphereGeometry args={[0.22, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2]} />
@@ -95,7 +119,7 @@ export function LandmarkMesh({ lm }: { lm: Landmark }) {
             <group key={x} position={[x, 0, 0.36]}>
               <mesh castShadow position={[0, 0.3, 0]}>
                 <cylinderGeometry args={[0.035, 0.04, 0.6, 6]} />
-                <Mat color="#f1ece2" />
+                <Mat color="#ffffff" map={plaster} />
               </mesh>
               <mesh castShadow position={[0, 0.65, 0]}>
                 <coneGeometry args={[0.05, 0.1, 6]} />
@@ -110,7 +134,7 @@ export function LandmarkMesh({ lm }: { lm: Landmark }) {
         <group scale={Math.max(0.8, h)}>
           <mesh castShadow position={[0, 0.14, 0]}>
             <boxGeometry args={[0.9, 0.28, 0.38]} />
-            {mat}
+            <Mat color="#ffffff" map={plaster} />
           </mesh>
           <mesh castShadow position={[0, 0.42, 0]}>
             <boxGeometry args={[0.16, 0.34, 0.16]} />
@@ -388,11 +412,11 @@ export function LandmarkMesh({ lm }: { lm: Landmark }) {
             <group key={c} position={[-0.33 + k * 0.22, 0, 0]}>
               <mesh castShadow position={[0, 0.22 * h * 2, 0]}>
                 <boxGeometry args={[0.2, 0.44 * h * 2, 0.7]} />
-                <Mat color={c} />
+                <Mat color={c} map={plaster} roughness={0.86} />
               </mesh>
               <mesh castShadow position={[0, 0.46 * h * 2, 0]}>
                 <boxGeometry args={[0.22, 0.05, 0.74]} />
-                <Mat color="#b5532f" />
+                <Mat color="#ffffff" map={roof} roughness={0.9} />
               </mesh>
             </group>
           ))}
@@ -498,7 +522,7 @@ export function LandmarkMesh({ lm }: { lm: Landmark }) {
         <group>
           <mesh position={[0, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]}>
             <circleGeometry args={[0.45, 10]} />
-            <meshStandardMaterial color="#2b241f" flatShading />
+            <meshStandardMaterial color="#2b241f" roughness={0.96} />
           </mesh>
           <mesh
             position={[0, 0.03, 0]}
@@ -561,14 +585,14 @@ function Fire({ seed, y }: { seed: number; y: number }) {
             color={i === 0 ? "#ff7a1a" : "#ffc233"}
             emissive="#ff5500"
             emissiveIntensity={1.6}
-            flatShading
+            roughness={0.94}
           />
         </mesh>
       ))}
       {[0, 1].map((k) => (
         <mesh key={`s${k}`} position={[0, 1, 0]}>
           <icosahedronGeometry args={[0.22, 0]} />
-          <meshStandardMaterial color="#3a3633" transparent opacity={0.5} flatShading />
+          <meshStandardMaterial color="#3a3633" transparent opacity={0.5} roughness={0.96} />
         </mesh>
       ))}
     </group>
@@ -590,7 +614,7 @@ function Rubble({ seed }: { seed: number }) {
       {bits.map((b, i) => (
         <mesh key={i} position={b.p} rotation={[b.r, b.r, 0]} castShadow>
           <boxGeometry args={[b.s, b.s, b.s]} />
-          <meshStandardMaterial color={i % 2 ? "#6e655b" : "#9a9084"} flatShading />
+          <meshStandardMaterial color={i % 2 ? "#6e655b" : "#9a9084"} roughness={0.94} />
         </mesh>
       ))}
     </group>

@@ -12,6 +12,7 @@ import {
   ShapeGeometry,
   Stomper,
   ease,
+  useSurfaceMap,
   type ActorProps,
 } from "./actorParts";
 import { ACTOR_LIBRARY, LIBRARY_IMPACT } from "./ActorLibrary";
@@ -55,12 +56,16 @@ const RESPONDER_COLOR: Record<Responder, string> = {
   cleanup: "#e6801f",
 };
 
+/** Stable random-looking details make an event replay keep the same shape. */
+const detail = (seed: number, index: number, salt = 0) => hash(seed * 104729 + index, salt);
+
 // ---------------------------------------------------------------------------
 // Falling things: whale and giant objects
 // ---------------------------------------------------------------------------
 
 function Whale(p: ActorProps) {
   const tail = useRef<THREE.Group>(null);
+  const skin = useSurfaceMap("/textures/whale-skin.webp");
   useFrame(() => {
     if (tail.current) tail.current.rotation.x = Math.sin(p.getT() * 3) * 0.35;
   });
@@ -68,8 +73,8 @@ function Whale(p: ActorProps) {
   return (
     <Faller {...p}>
       <mesh castShadow scale={[0.55, 0.45, 1.1]}>
-        <sphereGeometry args={[0.5, 14, 10]} />
-        <Mat color={c} />
+        <sphereGeometry args={[0.5, 32, 24]} />
+        <Mat color="#ffffff" map={skin} roughness={0.42} />
       </mesh>
       <mesh position={[0, -0.1, 0.05]} scale={[0.45, 0.3, 0.95]}>
         <sphereGeometry args={[0.5, 12, 8]} />
@@ -85,7 +90,25 @@ function Whale(p: ActorProps) {
             <sphereGeometry args={[0.035, 6, 6]} />
             <Mat color="#111111" />
           </mesh>
+          <mesh position={[sgn * 0.34, 0.12, 0.31]}>
+            <sphereGeometry args={[0.024, 10, 8]} />
+            <Mat color="#101417" />
+          </mesh>
+          <mesh position={[sgn * 0.35, 0.135, 0.325]}>
+            <sphereGeometry args={[0.008, 8, 6]} />
+            <Mat color="#f1eee0" emissive="#e7e1c9" />
+          </mesh>
         </group>
+      ))}
+      <mesh position={[0, 0.23, -0.04]} rotation={[Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[0.055, 12]} />
+        <Mat color="#243b49" />
+      </mesh>
+      {[0.1, 0.24, 0.38, 0.52].map((z) => (
+        <mesh key={z} position={[0, -0.245, z]} scale={[0.35, 0.015, 0.012]}>
+          <sphereGeometry args={[0.5, 12, 8]} />
+          <Mat color="#bfd0d3" />
+        </mesh>
       ))}
       <group ref={tail} position={[0, 0, -0.5]}>
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, -0.25]}>
@@ -116,10 +139,23 @@ function GiantObject(p: ActorProps) {
 // Meteor
 // ---------------------------------------------------------------------------
 
-function Meteor({ a, focus, getT, impact }: ActorProps) {
+function Meteor({ a, focus, getT, impact, seed }: ActorProps) {
   const rock = useRef<THREE.Group>(null);
   const trail = useRef<THREE.Group>(null);
   const s = 0.25 + a.size * 0.15;
+  const rockMap = useSurfaceMap("/textures/wet-asphalt.webp");
+  const rockGeometry = useMemo(() => {
+    const geometry = new THREE.IcosahedronGeometry(1, 2);
+    const positions = geometry.getAttribute("position");
+    for (let i = 0; i < positions.count; i++) {
+      const p = new THREE.Vector3().fromBufferAttribute(positions, i);
+      const radius = 0.86 + detail(seed, i, 71) * 0.26;
+      positions.setXYZ(i, p.x * radius, p.y * radius, p.z * radius);
+    }
+    positions.needsUpdate = true;
+    geometry.computeVertexNormals();
+    return geometry;
+  }, [seed]);
   const start = useMemo(() => new THREE.Vector3(focus.x - 16, 24, focus.z - 9), [focus]);
   const end = useMemo(() => new THREE.Vector3(focus.x, 0.3, focus.z), [focus]);
   useFrame(() => {
@@ -143,9 +179,13 @@ function Meteor({ a, focus, getT, impact }: ActorProps) {
   return (
     <>
       <group ref={rock} scale={s}>
-        <mesh>
-          <icosahedronGeometry args={[1, 0]} />
-          <Mat color="#4a3b33" emissive="#ff5a1f" />
+        <mesh castShadow>
+          <primitive object={rockGeometry} attach="geometry" />
+          <Mat color="#776151" map={rockMap} roughness={0.94} emissive="#6a2410" />
+        </mesh>
+        <mesh scale={1.035}>
+          <primitive object={rockGeometry} attach="geometry" />
+          <meshBasicMaterial color="#ff6e28" transparent opacity={0.16} side={THREE.BackSide} />
         </mesh>
       </group>
       <group ref={trail}>
@@ -170,67 +210,150 @@ function Meteor({ a, focus, getT, impact }: ActorProps) {
 
 function Kaiju(p: ActorProps) {
   const c = p.a.color;
+  const tail = useRef<THREE.Group>(null);
+  const limbs = useRef<THREE.Group>(null);
+  const scales = useSurfaceMap("/textures/kaiju-scales.webp");
+  useFrame(() => {
+    const t = p.getT();
+    if (tail.current) tail.current.rotation.y = Math.sin(t * 2.2) * 0.22;
+    limbs.current?.children.forEach((limb, i) => {
+      limb.rotation.x = Math.sin(t * 4 + (i % 2) * Math.PI) * (i < 2 ? 0.12 : 0.32);
+    });
+  });
   return (
     <Stomper {...p}>
-      {[-0.2, 0.2].map((x) => (
-        <mesh key={x} castShadow position={[x, 0.4, 0]}>
-          <cylinderGeometry args={[0.12, 0.15, 0.8, 6]} />
-          <Mat color={c} />
-        </mesh>
-      ))}
-      <mesh castShadow position={[0, 1.15, 0]}>
-        <capsuleGeometry args={[0.36, 0.6, 4, 8]} />
-        <Mat color={c} />
+      <mesh castShadow position={[0, 0.96, -0.08]} scale={[0.62, 0.52, 0.46]}>
+        <sphereGeometry args={[1, 24, 18]} />
+        <Mat color="#ffffff" map={scales} roughness={0.82} />
       </mesh>
-      <mesh castShadow position={[0, 1.85, 0.12]}>
-        <sphereGeometry args={[0.28, 10, 8]} />
-        <Mat color={c} />
+      <mesh castShadow position={[0, 1.48, 0.06]} scale={[0.58, 0.62, 0.4]}>
+        <sphereGeometry args={[1, 24, 18]} />
+        <Mat color="#ffffff" map={scales} roughness={0.8} />
       </mesh>
-      {[-0.1, 0.1].map((x) => (
-        <mesh key={x} position={[x, 1.9, 0.36]}>
-          <sphereGeometry args={[0.05, 6, 6]} />
-          <Mat color="#fff27a" emissive="#ffd000" />
-        </mesh>
-      ))}
-      {[0.9, 1.2, 1.5].map((y) => (
-        <mesh key={y} castShadow position={[0, y, -0.36]} rotation={[-0.6, 0, 0]}>
-          <coneGeometry args={[0.1, 0.3, 4]} />
-          <Mat color="#d9d4c3" />
-        </mesh>
-      ))}
-      <mesh castShadow position={[0, 0.5, -0.6]} rotation={[-1.1, 0, 0]}>
-        <coneGeometry args={[0.2, 1, 6]} />
-        <Mat color={c} />
+      <mesh castShadow position={[0, 1.91, 0.28]} scale={[0.34, 0.3, 0.4]}>
+        <sphereGeometry args={[1, 20, 16]} />
+        <Mat color="#ffffff" map={scales} roughness={0.78} />
       </mesh>
+      <mesh castShadow position={[0, 1.76, 0.52]} scale={[0.25, 0.13, 0.28]}>
+        <sphereGeometry args={[1, 18, 12]} />
+        <Mat color="#30352e" />
+      </mesh>
+      {[-1, 1].map((side) => (
+        <group key={side}>
+          <mesh position={[side * 0.23, 1.98, 0.51]}>
+            <sphereGeometry args={[0.065, 16, 12]} />
+            <Mat color="#efb731" emissive="#714816" />
+          </mesh>
+          <mesh position={[side * 0.25, 1.98, 0.565]} scale={[0.3, 1, 0.35]}>
+            <sphereGeometry args={[0.028, 12, 10]} />
+            <Mat color="#131815" />
+          </mesh>
+          <mesh position={[side * 0.26, 1.15, 0.32]} rotation={[0, 0, side * 0.12]}>
+            <capsuleGeometry args={[0.12, 0.36, 5, 12]} />
+            <Mat color="#ffffff" map={scales} roughness={0.82} />
+          </mesh>
+          <mesh castShadow position={[side * 0.26, 0.48, 0.02]} scale={[0.2, 0.5, 0.2]}>
+            <sphereGeometry args={[0.5, 18, 14]} />
+            <Mat color="#ffffff" map={scales} roughness={0.82} />
+          </mesh>
+          <mesh castShadow position={[side * 0.26, 0.12, 0.18]} scale={[0.2, 0.12, 0.3]}>
+            <sphereGeometry args={[0.5, 16, 12]} />
+            <Mat color="#394139" />
+          </mesh>
+          {[-0.12, 0, 0.12].map((toe) => (
+            <mesh key={toe} position={[side * 0.26 + toe, 0.1, 0.39]} rotation={[0.18, 0, 0]}>
+              <coneGeometry args={[0.04, 0.16, 8]} />
+              <Mat color="#ded8c4" />
+            </mesh>
+          ))}
+        </group>
+      ))}
+      <group ref={limbs}>
+        {[-0.46, 0.46].map((x) => (
+          <group key={x}>
+            <mesh position={[x, 1.3, 0.24]} rotation={[0, 0, x * 0.3]}>
+              <capsuleGeometry args={[0.095, 0.38, 5, 10]} />
+              <Mat color="#ffffff" map={scales} />
+            </mesh>
+            <mesh position={[x * 1.13, 1.06, 0.38]} rotation={[0.25, 0, x * 0.2]}>
+              <capsuleGeometry args={[0.075, 0.28, 5, 10]} />
+              <Mat color="#ffffff" map={scales} />
+            </mesh>
+            {[-1, 0, 1].map((claw) => (
+              <mesh
+                key={claw}
+                position={[x * 1.13 + claw * 0.07, 0.89, 0.57]}
+                rotation={[0.3, 0, 0]}
+              >
+                <coneGeometry args={[0.025, 0.11, 6]} />
+                <Mat color="#d7d0bd" />
+              </mesh>
+            ))}
+          </group>
+        ))}
+      </group>
+      {Array.from({ length: 9 }, (_, i) => {
+        const y = 0.88 + i * 0.14;
+        const z = -0.3 - i * 0.1;
+        const size = 0.17 - i * 0.01;
+        return (
+          <mesh key={i} castShadow position={[0, y, z]} rotation={[-0.55, 0, 0]}>
+            <coneGeometry args={[size, size * 1.5, 7]} />
+            <Mat color={i % 2 ? "#4c5449" : "#747969"} roughness={0.9} />
+          </mesh>
+        );
+      })}
+      <group ref={tail} position={[0, 0.91, -0.42]}>
+        {[0, 1, 2, 3].map((i) => (
+          <mesh key={i} position={[0, -0.025 * i, -0.23 * i]} rotation={[-0.15, 0, 0]}>
+            <capsuleGeometry args={[0.22 - i * 0.045, 0.34, 5, 10]} />
+            <Mat color="#ffffff" map={scales} roughness={0.84} />
+          </mesh>
+        ))}
+      </group>
     </Stomper>
   );
 }
 
 function Creature(p: ActorProps) {
   const legs = useRef<THREE.Group>(null);
+  const scales = useSurfaceMap("/textures/kaiju-scales.webp");
   useFrame(() => {
     const t = p.getT();
     legs.current?.children.forEach(
       (l, i) => (l.rotation.x = Math.sin(t * 9 + (i % 2) * Math.PI) * 0.5),
     );
   });
-  const c = p.a.color;
   return (
     <Stomper {...p}>
-      <mesh castShadow position={[0, 0.75, 0]}>
-        <boxGeometry args={[0.6, 0.45, 1.1]} />
-        <Mat color={c} />
+      <mesh castShadow position={[0, 0.73, -0.04]} scale={[0.4, 0.32, 0.63]}>
+        <sphereGeometry args={[1, 24, 18]} />
+        <Mat color={p.a.color} map={scales} roughness={0.84} />
       </mesh>
-      <mesh castShadow position={[0, 1.05, 0.62]}>
-        <boxGeometry args={[0.4, 0.38, 0.4]} />
-        <Mat color={c} />
+      <mesh castShadow position={[0, 0.97, 0.54]} scale={[0.26, 0.24, 0.33]}>
+        <sphereGeometry args={[1, 20, 16]} />
+        <Mat color={p.a.color} map={scales} roughness={0.82} />
       </mesh>
-      {[-0.13, 0.13].map((x) => (
-        <mesh key={x} position={[x, 1.32, 0.62]}>
-          <coneGeometry args={[0.07, 0.2, 4]} />
-          <Mat color={c} />
-        </mesh>
+      {[-1, 1].map((side) => (
+        <group key={side}>
+          <mesh position={[side * 0.2, 1.05, 0.67]}>
+            <sphereGeometry args={[0.052, 12, 10]} />
+            <Mat color="#d9ac49" />
+          </mesh>
+          <mesh position={[side * 0.207, 1.055, 0.713]} scale={[0.45, 1, 0.4]}>
+            <sphereGeometry args={[0.03, 12, 10]} />
+            <Mat color="#111512" />
+          </mesh>
+          <mesh position={[side * 0.07, 1.14, 0.53]} rotation={[0.1, 0, side * -0.2]}>
+            <coneGeometry args={[0.065, 0.2, 8]} />
+            <Mat color="#79806b" map={scales} roughness={0.88} />
+          </mesh>
+        </group>
       ))}
+      <mesh position={[0, 0.9, 0.81]} scale={[0.15, 0.07, 0.04]}>
+        <sphereGeometry args={[1, 16, 10]} />
+        <Mat color="#211c1a" />
+      </mesh>
       <group ref={legs}>
         {[
           [-0.22, 0.4],
@@ -239,14 +362,14 @@ function Creature(p: ActorProps) {
           [0.22, -0.4],
         ].map(([x, z], i) => (
           <mesh key={i} castShadow position={[x, 0.3, z]}>
-            <cylinderGeometry args={[0.07, 0.07, 0.6, 5]} />
-            <Mat color={c} />
+            <capsuleGeometry args={[0.07, 0.32, 4, 10]} />
+            <Mat color={p.a.color} map={scales} roughness={0.86} />
           </mesh>
         ))}
       </group>
       <mesh position={[0, 0.9, -0.7]} rotation={[-0.8, 0, 0]}>
-        <cylinderGeometry args={[0.04, 0.06, 0.6, 5]} />
-        <Mat color={c} />
+        <coneGeometry args={[0.055, 0.72, 10]} />
+        <Mat color={p.a.color} map={scales} roughness={0.88} />
       </mesh>
     </Stomper>
   );
@@ -283,13 +406,24 @@ function Ufo({ a, focus, getT, impact }: ActorProps) {
   });
   return (
     <group ref={ref} scale={s}>
-      <mesh castShadow scale={[1, 0.2, 1]}>
-        <sphereGeometry args={[0.9, 16, 8]} />
-        <Mat color={a.color} />
+      <mesh castShadow scale={[1.25, 0.18, 1.25]}>
+        <sphereGeometry args={[0.9, 40, 24]} />
+        <meshPhysicalMaterial color={a.color} metalness={0.82} roughness={0.24} clearcoat={0.9} />
       </mesh>
       <mesh position={[0, 0.12, 0]}>
-        <sphereGeometry args={[0.38, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2]} />
-        <meshStandardMaterial color="#9fe8ff" transparent opacity={0.7} />
+        <sphereGeometry args={[0.4, 32, 20, 0, Math.PI * 2, 0, Math.PI / 2]} />
+        <meshPhysicalMaterial
+          color="#93dff0"
+          roughness={0.12}
+          metalness={0.18}
+          clearcoat={1}
+          transparent
+          opacity={0.66}
+        />
+      </mesh>
+      <mesh position={[0, -0.075, 0]}>
+        <torusGeometry args={[0.91, 0.035, 12, 64]} />
+        <meshStandardMaterial color="#c8d3d6" metalness={0.9} roughness={0.2} />
       </mesh>
       <group ref={lights}>
         {Array.from({ length: 8 }, (_, i) => (
@@ -322,11 +456,39 @@ function Ufo({ a, focus, getT, impact }: ActorProps) {
 
 function Tornado({ a, focus, getT, impact, seed }: ActorProps) {
   const ref = useRef<THREE.Group>(null);
+  const funnel = useRef<THREE.Mesh>(null);
+  const debris = useRef<THREE.InstancedMesh>(null);
   const s = 0.4 + a.size * 0.2;
   const dir = useMemo(() => {
     const ang = hash(seed, 3) * Math.PI * 2;
     return new THREE.Vector3(Math.cos(ang), 0, Math.sin(ang));
   }, [seed]);
+  const funnelGeometry = useMemo(
+    () =>
+      new THREE.LatheGeometry(
+        [
+          [0.04, 0],
+          [0.35, 0.08],
+          [0.72, 0.5],
+          [0.92, 1.25],
+          [0.78, 2.15],
+          [0.63, 3.05],
+          [0.86, 4.05],
+          [1.35, 4.8],
+        ].map(([x, y]) => new THREE.Vector2(x, y)),
+        40,
+      ),
+    [],
+  );
+  const particles = useMemo(
+    () =>
+      Array.from({ length: 52 }, (_, i) => ({
+        y: 0.12 + detail(seed, i, 79) * 4.5,
+        phase: detail(seed, i, 83) * Math.PI * 2,
+        radius: 0.35 + detail(seed, i, 89) * 0.85,
+      })),
+    [seed],
+  );
   useFrame(() => {
     const g = ref.current;
     if (!g) return;
@@ -335,19 +497,39 @@ function Tornado({ a, focus, getT, impact, seed }: ActorProps) {
     const off = 12 - (24 * t) / (impact * 2);
     g.position.set(focus.x + dir.x * off, 0, focus.z + dir.z * off);
     g.visible = t < total;
-    g.children.forEach((c, i) => {
-      c.rotation.y = t * (6 + i * 0.4);
-      c.position.x = Math.sin(t * 3 + i * 0.6) * 0.15 * i * 0.3;
-    });
+    if (funnel.current) funnel.current.rotation.y = t * 1.8;
+    const m = debris.current;
+    if (m) {
+      particles.forEach((p, i) => {
+        const angle = t * (6.2 - p.y * 0.32) + p.phase;
+        tmpP.set(Math.cos(angle) * p.radius, p.y, Math.sin(angle) * p.radius);
+        tmpQ.setFromEuler(new THREE.Euler(angle, angle * 0.5, 0));
+        tmpM.compose(tmpP, tmpQ, tmpS.setScalar(0.055 + (i % 4) * 0.012));
+        m.setMatrixAt(i, tmpM);
+      });
+      m.instanceMatrix.needsUpdate = true;
+    }
   });
   return (
     <group ref={ref} scale={s}>
-      {Array.from({ length: 10 }, (_, i) => (
-        <mesh key={i} position={[0, i * 0.38 + 0.1, 0]} rotation={[Math.PI / 2, 0, 0]}>
-          <torusGeometry args={[0.15 + i * 0.13, 0.07 + i * 0.01, 5, 12]} />
-          <meshStandardMaterial color={a.color} transparent opacity={0.55} flatShading />
-        </mesh>
-      ))}
+      <mesh ref={funnel} geometry={funnelGeometry}>
+        <meshPhysicalMaterial
+          color={a.color}
+          roughness={0.85}
+          transparent
+          opacity={0.45}
+          side={THREE.DoubleSide}
+          depthWrite={false}
+        />
+      </mesh>
+      <instancedMesh
+        ref={debris}
+        args={[undefined, undefined, particles.length]}
+        frustumCulled={false}
+      >
+        <dodecahedronGeometry args={[1, 0]} />
+        <meshStandardMaterial color="#625c53" roughness={0.96} />
+      </instancedMesh>
     </group>
   );
 }
@@ -355,30 +537,85 @@ function Tornado({ a, focus, getT, impact, seed }: ActorProps) {
 function Wave({ a, focus, getT, impact }: ActorProps) {
   const ref = useRef<THREE.Group>(null);
   const h = 0.3 + a.size * 0.18;
+  const waterMap = useSurfaceMap("/textures/whale-skin.webp");
+  const { waveGeometry, foamGeometry } = useMemo(() => {
+    const profile = new THREE.Shape();
+    profile.moveTo(-0.9, 0);
+    profile.lineTo(0.9, 0);
+    profile.lineTo(0.94, h * 0.58);
+    profile.bezierCurveTo(1.04, h * 0.82, 0.9, h * 1.08, 0.55, h * 0.96);
+    profile.bezierCurveTo(0.3, h * 0.9, 0.25, h * 0.73, -0.08, h * 0.61);
+    profile.lineTo(-0.9, 0);
+    const solid = new THREE.ExtrudeGeometry(profile, {
+      depth: 34,
+      bevelEnabled: true,
+      bevelSegments: 3,
+      bevelSize: 0.045,
+      bevelThickness: 0.05,
+      curveSegments: 20,
+    });
+    solid.translate(0, 0, -17);
+    const crest = new THREE.CatmullRomCurve3(
+      Array.from({ length: 18 }, (_, i) => {
+        const z = -16 + (32 * i) / 17;
+        return new THREE.Vector3(
+          0.89 + Math.sin(i * 0.71) * 0.045,
+          h * (0.64 + Math.sin(i * 0.9) * 0.12),
+          z,
+        );
+      }),
+    );
+    return {
+      waveGeometry: solid,
+      foamGeometry: new THREE.TubeGeometry(crest, 70, 0.045, 8, false),
+    };
+  }, [h]);
+  const waveMap = useMemo(() => {
+    const texture = waterMap.clone();
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(1, 2);
+    texture.needsUpdate = true;
+    return texture;
+  }, [waterMap]);
   useFrame(() => {
     const g = ref.current;
     if (!g) return;
     const t = getT();
     const x = focus.x - 18 + (18 * t) / impact;
-    g.position.set(x, h / 2, 0);
+    g.position.set(x, 0, focus.z);
     g.visible = x < 20;
     g.scale.y = 1 + Math.sin(t * 5) * 0.08;
   });
   return (
     <group ref={ref}>
-      <mesh>
-        <boxGeometry args={[1.6, h, 34]} />
-        <meshStandardMaterial color={a.color} transparent opacity={0.7} />
+      <mesh geometry={waveGeometry} castShadow>
+        <meshPhysicalMaterial
+          map={waveMap}
+          color={a.color}
+          roughness={0.22}
+          metalness={0.12}
+          clearcoat={0.9}
+          clearcoatRoughness={0.14}
+          transparent
+          opacity={0.86}
+          side={THREE.DoubleSide}
+        />
       </mesh>
-      <mesh position={[0.3, h / 2, 0]}>
-        <boxGeometry args={[1, 0.08, 34]} />
-        <meshStandardMaterial color="#f2f7fa" />
+      <mesh geometry={foamGeometry}>
+        <meshStandardMaterial
+          color="#eff8f5"
+          roughness={0.38}
+          emissive="#a6dfe3"
+          emissiveIntensity={0.14}
+        />
       </mesh>
     </group>
   );
 }
 
-function Storm({ focus, getT, impact, bus }: ActorProps) {
+function Storm({ focus, getT, impact, bus, seed }: ActorProps) {
   const clouds = useRef<THREE.Group>(null);
   const bolt = useRef<THREE.Group>(null);
   const nextBolt = useRef(0);
@@ -396,8 +633,13 @@ function Storm({ focus, getT, impact, bus }: ActorProps) {
     const b = bolt.current;
     if (!b) return;
     if (t > impact - 0.4 && t > nextBolt.current) {
-      nextBolt.current = t + 0.5 + Math.random() * 0.8;
-      b.position.set(focus.x + (Math.random() - 0.5) * 5, 0, focus.z + (Math.random() - 0.5) * 5);
+      const strike = Math.round(t * 10);
+      nextBolt.current = t + 0.5 + detail(seed, strike, 97) * 0.8;
+      b.position.set(
+        focus.x + (detail(seed, strike, 101) - 0.5) * 5,
+        0,
+        focus.z + (detail(seed, strike, 103) - 0.5) * 5,
+      );
       b.userData.until = t + 0.15;
       bus.flash = 1;
       bus.shake = Math.max(bus.shake, 0.05);
@@ -408,23 +650,30 @@ function Storm({ focus, getT, impact, bus }: ActorProps) {
     <>
       <group ref={clouds}>
         {Array.from({ length: 7 }, (_, i) => (
-          <mesh key={i} scale={[3, 1, 2.2]}>
-            <dodecahedronGeometry args={[1, 0]} />
-            <meshStandardMaterial color="#4a525c" flatShading />
-          </mesh>
+          <group key={i}>
+            {[
+              [-1.1, 0, 0, 1.8, 0.75, 1.3],
+              [0, 0.24, 0.24, 1.9, 0.95, 1.55],
+              [1.12, -0.08, -0.12, 1.65, 0.78, 1.2],
+              [-0.3, 0.45, -0.55, 1.25, 0.72, 1.15],
+            ].map(([x, y, z, sx, sy, sz], j) => (
+              <mesh key={j} position={[x, y, z]} scale={[sx, sy, sz]}>
+                <sphereGeometry args={[1, 24, 16]} />
+                <meshStandardMaterial color={j % 2 ? "#454e59" : "#505965"} roughness={0.97} />
+              </mesh>
+            ))}
+          </group>
         ))}
       </group>
       <group ref={bolt} visible={false}>
-        {[
-          [0, 5.5, 0, 0.3],
-          [0.4, 3.5, 0.2, -0.4],
-          [0.1, 1.4, -0.1, 0.3],
-        ].map(([x, y, z, r], i) => (
-          <mesh key={i} position={[x, y, z]} rotation={[0, 0, r]}>
-            <cylinderGeometry args={[0.04, 0.04, 2.3, 4]} />
-            <meshBasicMaterial color="#fffbe0" />
-          </mesh>
-        ))}
+        <mesh position={[0.1, 2.8, 0]} rotation={[0.08, 0, 0.04]}>
+          <cylinderGeometry args={[0.026, 0.045, 5.2, 6]} />
+          <meshBasicMaterial color="#fffbe0" />
+        </mesh>
+        <mesh position={[-0.42, 3.25, 0.04]} rotation={[0.02, 0, -0.52]}>
+          <cylinderGeometry args={[0.012, 0.02, 1.55, 5]} />
+          <meshBasicMaterial color="#d8f4ff" />
+        </mesh>
       </group>
     </>
   );
@@ -436,6 +685,7 @@ function Storm({ focus, getT, impact, bus }: ActorProps) {
 
 const tmpM = new THREE.Matrix4();
 const tmpQ = new THREE.Quaternion();
+const tmpP = new THREE.Vector3();
 const tmpS = new THREE.Vector3();
 const tmpC = new THREE.Color();
 const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
@@ -448,14 +698,14 @@ function Swarm({ a, focus, getT, impact, seed }: ActorProps) {
     const ang = hash(seed, 5) * Math.PI * 2;
     const ox = focus.x + Math.cos(ang) * 17;
     const oz = focus.z + Math.sin(ang) * 17;
-    return Array.from({ length: n }, () => ({
+    return Array.from({ length: n }, (_, i) => ({
       p: new THREE.Vector3(
-        ox + (Math.random() - 0.5) * 3,
-        2 + Math.random() * 3,
-        oz + (Math.random() - 0.5) * 3,
+        ox + (detail(seed, i, 107) - 0.5) * 3,
+        2 + detail(seed, i, 109) * 3,
+        oz + (detail(seed, i, 113) - 0.5) * 3,
       ),
       v: new THREE.Vector3(),
-      o: Math.random() * 10,
+      o: detail(seed, i, 127) * 10,
     }));
   }, [n, focus, seed]);
   useFrame((_, rawDt) => {
@@ -490,23 +740,23 @@ function Swarm({ a, focus, getT, impact, seed }: ActorProps) {
   );
 }
 
-function RainOf({ a, focus, getT, radius }: ActorProps & { radius: number }) {
+function RainOf({ a, focus, getT, radius, seed }: ActorProps & { radius: number }) {
   const ref = useRef<THREE.InstancedMesh>(null);
   const n = Math.round(a.count);
   const s = 0.12 + a.size * 0.05;
   const items = useMemo(
     () =>
-      Array.from({ length: n }, () => {
-        const r = Math.sqrt(Math.random()) * (radius + 1.5);
-        const ang = Math.random() * Math.PI * 2;
+      Array.from({ length: n }, (_, i) => {
+        const r = Math.sqrt(detail(seed, i, 131)) * (radius + 1.5);
+        const ang = detail(seed, i, 137) * Math.PI * 2;
         return {
           x: focus.x + Math.cos(ang) * r,
           z: focus.z + Math.sin(ang) * r,
-          delay: Math.random() * 2.4,
-          spin: Math.random() * 6,
+          delay: detail(seed, i, 139) * 2.4,
+          spin: detail(seed, i, 149) * 6,
         };
       }),
-    [n, focus, radius],
+    [n, focus, radius, seed],
   );
   useFrame(() => {
     const t = getT();
@@ -535,7 +785,7 @@ function RainOf({ a, focus, getT, radius }: ActorProps & { radius: number }) {
   );
 }
 
-function Fireworks({ a, focus, getT }: ActorProps) {
+function Fireworks({ a, focus, getT, seed }: ActorProps) {
   const ref = useRef<THREE.InstancedMesh>(null);
   const BURSTS = 8;
   const PER = 36;
@@ -543,16 +793,21 @@ function Fireworks({ a, focus, getT }: ActorProps) {
     () =>
       Array.from({ length: BURSTS }, (_, b) => ({
         at: 0.4 + b * 0.9,
-        x: focus.x + (Math.random() - 0.5) * 6,
-        y: 6 + Math.random() * 3,
-        z: focus.z + (Math.random() - 0.5) * 6,
+        x: focus.x + (detail(seed, b, 151) - 0.5) * 6,
+        y: 6 + detail(seed, b, 157) * 3,
+        z: focus.z + (detail(seed, b, 163) - 0.5) * 6,
         hue:
           b % 2 && a.color
             ? new THREE.Color(a.color).getHSL({ h: 0, s: 0, l: 0 }).h
-            : Math.random(),
-        dirs: Array.from({ length: PER }, () => new THREE.Vector3().randomDirection()),
+            : detail(seed, b, 167),
+        dirs: Array.from({ length: PER }, (_, i) => {
+          const y = detail(seed, b * PER + i, 173) * 2 - 1;
+          const angle = detail(seed, b * PER + i, 179) * Math.PI * 2;
+          const ring = Math.sqrt(1 - y * y);
+          return new THREE.Vector3(Math.cos(angle) * ring, y, Math.sin(angle) * ring);
+        }),
       })),
-    [focus, a.color],
+    [focus, a.color, seed],
   );
   useFrame(() => {
     const t = getT();
@@ -596,26 +851,28 @@ function ImpactBurst({
   impact,
   size,
   color,
+  seed,
 }: {
   focus: { x: number; z: number };
   getT: () => number;
   impact: number;
   size: number;
   color: string;
+  seed: number;
 }) {
   const ring = useRef<THREE.Mesh>(null);
   const debris = useRef<THREE.InstancedMesh>(null);
   const parts = useMemo(
     () =>
-      Array.from({ length: 28 }, () => ({
+      Array.from({ length: 28 }, (_, i) => ({
         v: new THREE.Vector3(
-          (Math.random() - 0.5) * 6,
-          3 + Math.random() * 5,
-          (Math.random() - 0.5) * 6,
+          (detail(seed, i, 181) - 0.5) * 6,
+          3 + detail(seed, i, 191) * 5,
+          (detail(seed, i, 193) - 0.5) * 6,
         ).multiplyScalar(0.4 + size * 0.1),
-        r: Math.random() * 6,
+        r: detail(seed, i, 197) * 6,
       })),
-    [size],
+    [size, seed],
   );
   useFrame(() => {
     const lt = getT() - impact;
@@ -653,15 +910,14 @@ function ImpactBurst({
       </mesh>
       <instancedMesh ref={debris} args={[undefined, undefined, parts.length]} frustumCulled={false}>
         <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial color="#8d7f6d" flatShading />
+        <meshStandardMaterial color={color} roughness={0.9} />
       </instancedMesh>
     </>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Generated actors: a Meshy model from the shared library, dressed in the
-// city's flat-shaded style and moved like its built-in stand-in.
+// Shared imported actor models keep their source PBR maps and materials.
 // ---------------------------------------------------------------------------
 
 const WALKERS = new Set<ActorKind>(["kaiju", "creature", "tapir", "monitor_lizard", "lion_dance"]);
@@ -678,12 +934,27 @@ function GeneratedMesh({ url, color }: { url: string; color: string }) {
   const { scene } = useGLTF(url);
   const object = useMemo(() => {
     const o = scene.clone(true);
-    const mat = new THREE.MeshStandardMaterial({ color, flatShading: true, roughness: 0.7 });
+    const tint = new THREE.Color(color);
     o.traverse((c) => {
       const m = c as THREE.Mesh;
       if (!m.isMesh) return;
-      m.material = mat;
+      const preserve = (source: THREE.Material) => {
+        const next = source.clone();
+        if ("color" in next && (next as THREE.MeshStandardMaterial).color instanceof THREE.Color) {
+          (next as THREE.MeshStandardMaterial).color.multiply(tint);
+        }
+        if (next instanceof THREE.MeshStandardMaterial) {
+          next.roughness = Math.max(0.28, next.roughness);
+          if (next instanceof THREE.MeshPhysicalMaterial)
+            next.clearcoat = Math.max(0.18, next.clearcoat);
+        }
+        return next;
+      };
+      m.material = Array.isArray(m.material)
+        ? m.material.map(preserve)
+        : preserve(m.material ?? new THREE.MeshPhysicalMaterial({ color }));
       m.castShadow = true;
+      m.receiveShadow = true;
     });
     // Normalise to a unit footprint, resting on the ground.
     const box = new THREE.Box3().setFromObject(o);
@@ -884,6 +1155,7 @@ export function SpectacleView({
           getT={getT}
           impact={impact}
           size={primary.size}
+          seed={run.id}
           color={primary.kind === "whale" || primary.kind === "wave" ? "#d8f0ff" : "#c9b89c"}
         />
       )}

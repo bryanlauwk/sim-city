@@ -22,6 +22,31 @@ const tmpC = new THREE.Color();
 const UP = new THREE.Vector3(0, 1, 0);
 const FWD = new THREE.Vector3(0, 0, 1);
 const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
+const partM = new THREE.Matrix4();
+const partQ = new THREE.Quaternion();
+const partP = new THREE.Vector3();
+const partS = new THREE.Vector3();
+const detailBaseP = new THREE.Vector3();
+const detailBaseQ = new THREE.Quaternion();
+const WHEEL_AXLE = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2);
+
+function setVehiclePart(
+  mesh: THREE.InstancedMesh | null,
+  index: number,
+  offset: [number, number, number],
+  size: [number, number, number],
+  localRotation?: THREE.Quaternion,
+) {
+  if (!mesh) return;
+  partP
+    .set(...offset)
+    .applyQuaternion(detailBaseQ)
+    .add(detailBaseP);
+  partQ.copy(detailBaseQ);
+  if (localRotation) partQ.multiply(localRotation);
+  partM.compose(partP, partQ, partS.set(...size));
+  mesh.setMatrixAt(index, partM);
+}
 
 const rnd = Math.random;
 const pickOne = <T,>(a: T[]) => a[Math.floor(rnd() * a.length)];
@@ -285,11 +310,14 @@ export function Life({ city, bus }: { city: CityState; bus: WorldBus }) {
   const walkerCount = Math.round(Math.min(320, Math.max(80, pop / 4000)));
   const walkers = useRef<Walker[]>([]);
   const walkerColors = useRef<THREE.Color[]>([]);
+  const walkerSkinColors = useRef<THREE.Color[]>([]);
   useEffect(() => {
     walkers.current = spawnWalkers(walkable, walkerCount, 0.35);
     walkerColors.current = walkers.current.map(() =>
       new THREE.Color().setHSL(rnd(), 0.55, 0.35 + rnd() * 0.35),
     );
+    const skin = ["#f0c6a0", "#d7a47b", "#b77c58", "#8b5b42"];
+    walkerSkinColors.current = walkers.current.map(() => new THREE.Color(pickOne(skin)));
     // Re-spawn only when the crowd size changes; walkers re-route themselves.
   }, [walkerCount]);
 
@@ -355,12 +383,21 @@ export function Life({ city, bus }: { city: CityState; bus: WorldBus }) {
 
   // --- meshes ---------------------------------------------------------------
   const carMesh = useRef<THREE.InstancedMesh>(null);
+  const carRoofMesh = useRef<THREE.InstancedMesh>(null);
+  const carGlassMesh = useRef<THREE.InstancedMesh>(null);
+  const carWheelMesh = useRef<THREE.InstancedMesh>(null);
   const bikeMesh = useRef<THREE.InstancedMesh>(null);
+  const bikeWheelMesh = useRef<THREE.InstancedMesh>(null);
   const busMesh = useRef<THREE.InstancedMesh>(null);
+  const busGlassMesh = useRef<THREE.InstancedMesh>(null);
+  const busWheelMesh = useRef<THREE.InstancedMesh>(null);
   const specialMesh = useRef<THREE.InstancedMesh>(null);
   const beaconMesh = useRef<THREE.InstancedMesh>(null);
   const lightMesh = useRef<THREE.InstancedMesh>(null);
   const walkerMesh = useRef<THREE.InstancedMesh>(null);
+  const walkerHeadMesh = useRef<THREE.InstancedMesh>(null);
+  const walkerHairMesh = useRef<THREE.InstancedMesh>(null);
+  const walkerBagMesh = useRef<THREE.InstancedMesh>(null);
   const monkeyMesh = useRef<THREE.InstancedMesh>(null);
   const lizardMesh = useRef<THREE.InstancedMesh>(null);
   const birdMesh = useRef<THREE.InstancedMesh>(null);
@@ -412,13 +449,33 @@ export function Life({ city, bus }: { city: CityState; bus: WorldBus }) {
       scale: [number, number, number],
       lightOffset: number,
       lightStart: number,
+      vehicleKind: "car" | "bike" | "bus",
     ) => {
       if (!mesh) return lightStart;
       let l = lightStart;
+      const partMeshes =
+        vehicleKind === "car"
+          ? [carRoofMesh.current, carGlassMesh.current, carWheelMesh.current]
+          : vehicleKind === "bike"
+            ? [bikeWheelMesh.current]
+            : [busGlassMesh.current, busWheelMesh.current];
       const visible = night ? Math.ceil(list.length * 0.55) : list.length;
       list.forEach((v, k) => {
         if (k >= visible) {
           mesh.setMatrixAt(k, HIDDEN);
+          if (vehicleKind === "car") {
+            carRoofMesh.current?.setMatrixAt(k, HIDDEN);
+            carGlassMesh.current?.setMatrixAt(k, HIDDEN);
+            for (let wheel = 0; wheel < 4; wheel++)
+              carWheelMesh.current?.setMatrixAt(k * 4 + wheel, HIDDEN);
+          } else if (vehicleKind === "bike") {
+            for (let wheel = 0; wheel < 2; wheel++)
+              bikeWheelMesh.current?.setMatrixAt(k * 2 + wheel, HIDDEN);
+          } else {
+            busGlassMesh.current?.setMatrixAt(k, HIDDEN);
+            for (let wheel = 0; wheel < 4; wheel++)
+              busWheelMesh.current?.setMatrixAt(k * 4 + wheel, HIDDEN);
+          }
           return;
         }
         if (v.from === v.to) stepVehicle(v, 1, grid, graph, 1);
@@ -429,6 +486,55 @@ export function Life({ city, bus }: { city: CityState; bus: WorldBus }) {
         tmpM.compose(tmpP, tmpQ, tmpS);
         mesh.setMatrixAt(k, tmpM);
         mesh.setColorAt(k, v.color);
+        detailBaseP.copy(tmpP);
+        detailBaseQ.copy(tmpQ);
+        if (vehicleKind === "car") {
+          setVehiclePart(carRoofMesh.current, k, [0, 0.045, -0.005], [0.075, 0.038, 0.13]);
+          carRoofMesh.current?.setColorAt(k, v.color);
+          setVehiclePart(carGlassMesh.current, k, [0, 0.065, -0.005], [0.066, 0.025, 0.11]);
+          const wheels = [
+            [-0.052, -0.022, -0.068],
+            [0.052, -0.022, -0.068],
+            [-0.052, -0.022, 0.068],
+            [0.052, -0.022, 0.068],
+          ] as const;
+          wheels.forEach((offset, wheel) =>
+            setVehiclePart(
+              carWheelMesh.current,
+              k * 4 + wheel,
+              [...offset],
+              [0.034, 0.022, 0.034],
+              WHEEL_AXLE,
+            ),
+          );
+        } else if (vehicleKind === "bike") {
+          [-0.042, 0.042].forEach((z, wheel) =>
+            setVehiclePart(
+              bikeWheelMesh.current,
+              k * 2 + wheel,
+              [0, -0.02, z],
+              [0.06, 0.018, 0.06],
+              WHEEL_AXLE,
+            ),
+          );
+        } else {
+          setVehiclePart(busGlassMesh.current, k, [0, 0.025, -0.015], [0.137, 0.072, 0.31]);
+          const wheels = [
+            [-0.067, -0.035, -0.15],
+            [0.067, -0.035, -0.15],
+            [-0.067, -0.035, 0.15],
+            [0.067, -0.035, 0.15],
+          ] as const;
+          wheels.forEach((offset, wheel) =>
+            setVehiclePart(
+              busWheelMesh.current,
+              k * 4 + wheel,
+              [...offset],
+              [0.048, 0.03, 0.048],
+              WHEEL_AXLE,
+            ),
+          );
+        }
         if (night && lightMesh.current && l < 400) {
           tmpP.x += Math.sin(yaw) * lightOffset;
           tmpP.z += Math.cos(yaw) * lightOffset;
@@ -440,12 +546,27 @@ export function Life({ city, bus }: { city: CityState; bus: WorldBus }) {
       mesh.count = list.length;
       mesh.instanceMatrix.needsUpdate = true;
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+      for (const part of partMeshes) {
+        if (!part) continue;
+        part.count =
+          vehicleKind === "car"
+            ? part === carWheelMesh.current
+              ? list.length * 4
+              : list.length
+            : vehicleKind === "bike"
+              ? list.length * 2
+              : part === busWheelMesh.current
+                ? list.length * 4
+                : list.length;
+        part.instanceMatrix.needsUpdate = true;
+        if (part.instanceColor) part.instanceColor.needsUpdate = true;
+      }
       return l;
     };
     let lights = 0;
-    lights = drawTraffic(carMesh.current, cars.current, [1, 1, 1], 0.12, lights);
-    lights = drawTraffic(bikeMesh.current, bikes.current, [1, 1, 1], 0.07, lights);
-    lights = drawTraffic(busMesh.current, buses.current, [1, 1, 1], 0.21, lights);
+    lights = drawTraffic(carMesh.current, cars.current, [1, 1, 1], 0.12, lights, "car");
+    lights = drawTraffic(bikeMesh.current, bikes.current, [1, 1, 1], 0.07, lights, "bike");
+    lights = drawTraffic(busMesh.current, buses.current, [1, 1, 1], 0.21, lights, "bus");
     if (lightMesh.current) {
       lightMesh.current.count = lights;
       lightMesh.current.instanceMatrix.needsUpdate = true;
@@ -493,6 +614,9 @@ export function Life({ city, bus }: { city: CityState; bus: WorldBus }) {
       walkers.current.forEach((w, k) => {
         if (k >= visible) {
           wm.setMatrixAt(k, HIDDEN);
+          walkerHeadMesh.current?.setMatrixAt(k, HIDDEN);
+          walkerHairMesh.current?.setMatrixAt(k, HIDDEN);
+          walkerBagMesh.current?.setMatrixAt(k, HIDDEN);
           return;
         }
         const sp = stepWalker(w, dt, now, bus, walkable, 1);
@@ -500,12 +624,28 @@ export function Life({ city, bus }: { city: CityState; bus: WorldBus }) {
         tmpP.set(w.x, 0.1 + w.y + bob, w.z);
         tmpM.compose(tmpP, tmpQ.identity(), tmpS.set(1.4, 1.4, 1.4));
         wm.setMatrixAt(k, tmpM);
+        detailBaseP.copy(tmpP);
+        detailBaseQ.identity();
+        setVehiclePart(walkerHeadMesh.current, k, [0, 0.118, 0.003], [0.075, 0.075, 0.075]);
+        setVehiclePart(walkerHairMesh.current, k, [0, 0.151, 0.005], [0.077, 0.033, 0.077]);
+        if (k % 4 === 0)
+          setVehiclePart(walkerBagMesh.current, k, [0, 0.065, -0.047], [0.045, 0.06, 0.025]);
+        else walkerBagMesh.current?.setMatrixAt(k, HIDDEN);
         const c = walkerColors.current[k];
         if (c) wm.setColorAt(k, c);
+        const skin = walkerSkinColors.current[k];
+        if (skin) walkerHeadMesh.current?.setColorAt(k, skin);
+        if (c) walkerBagMesh.current?.setColorAt(k, c);
       });
       wm.count = walkers.current.length;
       wm.instanceMatrix.needsUpdate = true;
       if (wm.instanceColor) wm.instanceColor.needsUpdate = true;
+      for (const part of [walkerHeadMesh.current, walkerHairMesh.current, walkerBagMesh.current]) {
+        if (!part) continue;
+        part.count = walkers.current.length;
+        part.instanceMatrix.needsUpdate = true;
+        if (part.instanceColor) part.instanceColor.needsUpdate = true;
+      }
     }
 
     // Macaques hop between trees; monitor lizards patrol the riverbanks.
@@ -600,11 +740,32 @@ export function Life({ city, bus }: { city: CityState; bus: WorldBus }) {
         frustumCulled={false}
       >
         <boxGeometry args={[0.12, 0.08, 0.22]} />
-        <meshStandardMaterial flatShading roughness={0.4} metalness={0.3} />
+        <meshStandardMaterial roughness={0.4} metalness={0.3} />
+      </instancedMesh>
+      <instancedMesh
+        ref={carRoofMesh}
+        args={[undefined, undefined, 200]}
+        castShadow
+        frustumCulled={false}
+      >
+        <boxGeometry args={[0.075, 0.038, 0.13]} />
+        <meshStandardMaterial roughness={0.38} metalness={0.24} />
+      </instancedMesh>
+      <instancedMesh ref={carGlassMesh} args={[undefined, undefined, 200]} frustumCulled={false}>
+        <boxGeometry args={[0.066, 0.025, 0.11]} />
+        <meshStandardMaterial color="#32414a" roughness={0.22} metalness={0.12} />
+      </instancedMesh>
+      <instancedMesh ref={carWheelMesh} args={[undefined, undefined, 800]} frustumCulled={false}>
+        <cylinderGeometry args={[0.5, 0.5, 1, 12]} />
+        <meshStandardMaterial color="#202225" roughness={0.9} />
       </instancedMesh>
       <instancedMesh ref={bikeMesh} args={[undefined, undefined, 120]} frustumCulled={false}>
         <boxGeometry args={[0.04, 0.08, 0.12]} />
-        <meshStandardMaterial flatShading />
+        <meshStandardMaterial roughness={0.65} />
+      </instancedMesh>
+      <instancedMesh ref={bikeWheelMesh} args={[undefined, undefined, 240]} frustumCulled={false}>
+        <cylinderGeometry args={[0.5, 0.5, 1, 12]} />
+        <meshStandardMaterial color="#17191b" roughness={0.9} />
       </instancedMesh>
       <instancedMesh
         ref={busMesh}
@@ -613,7 +774,15 @@ export function Life({ city, bus }: { city: CityState; bus: WorldBus }) {
         frustumCulled={false}
       >
         <boxGeometry args={[0.15, 0.14, 0.42]} />
-        <meshStandardMaterial flatShading />
+        <meshStandardMaterial roughness={0.65} />
+      </instancedMesh>
+      <instancedMesh ref={busGlassMesh} args={[undefined, undefined, 16]} frustumCulled={false}>
+        <boxGeometry args={[0.137, 0.072, 0.31]} />
+        <meshStandardMaterial color="#263d4b" roughness={0.2} metalness={0.1} />
+      </instancedMesh>
+      <instancedMesh ref={busWheelMesh} args={[undefined, undefined, 64]} frustumCulled={false}>
+        <cylinderGeometry args={[0.5, 0.5, 1, 12]} />
+        <meshStandardMaterial color="#202225" roughness={0.9} />
       </instancedMesh>
       <instancedMesh
         ref={specialMesh}
@@ -622,7 +791,7 @@ export function Life({ city, bus }: { city: CityState; bus: WorldBus }) {
         frustumCulled={false}
       >
         <boxGeometry args={[0.15, 0.12, 0.3]} />
-        <meshStandardMaterial flatShading />
+        <meshStandardMaterial roughness={0.7} />
       </instancedMesh>
       <instancedMesh ref={beaconMesh} args={[undefined, undefined, 64]} frustumCulled={false}>
         <boxGeometry args={[0.1, 0.035, 0.05]} />
@@ -639,7 +808,29 @@ export function Life({ city, bus }: { city: CityState; bus: WorldBus }) {
         frustumCulled={false}
       >
         <capsuleGeometry args={[0.028, 0.07, 2, 5]} />
-        <meshStandardMaterial flatShading />
+        <meshStandardMaterial roughness={0.65} />
+      </instancedMesh>
+      <instancedMesh
+        ref={walkerHeadMesh}
+        args={[undefined, undefined, 340]}
+        castShadow
+        frustumCulled={false}
+      >
+        <sphereGeometry args={[0.5, 12, 10]} />
+        <meshStandardMaterial roughness={0.7} />
+      </instancedMesh>
+      <instancedMesh ref={walkerHairMesh} args={[undefined, undefined, 340]} frustumCulled={false}>
+        <sphereGeometry args={[0.5, 10, 8]} />
+        <meshStandardMaterial color="#26211e" roughness={0.95} />
+      </instancedMesh>
+      <instancedMesh
+        ref={walkerBagMesh}
+        args={[undefined, undefined, 340]}
+        castShadow
+        frustumCulled={false}
+      >
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial roughness={0.8} />
       </instancedMesh>
       <instancedMesh
         ref={monkeyMesh}

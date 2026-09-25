@@ -1,5 +1,5 @@
 import { useLayoutEffect, useMemo, useRef } from "react";
-import { useFrame } from "@react-three/fiber";
+import { useFrame, useLoader } from "@react-three/fiber";
 import * as THREE from "three";
 import type { Tile } from "@/lib/city/types";
 import { CROSSINGS } from "@/lib/city/kl";
@@ -24,16 +24,22 @@ const tmpC = new THREE.Color();
 /** Every tile's base slab in one draw call. */
 export function Ground({ grid }: { grid: Tile[] }) {
   const land = useRef<THREE.InstancedMesh>(null);
+  const roads = useRef<THREE.InstancedMesh>(null);
   const water = useRef<THREE.InstancedMesh>(null);
   const counts = useMemo(() => {
     let w = 0;
-    for (const t of grid) if (t.kind === "water") w++;
-    return { land: grid.length - w, water: w };
+    let r = 0;
+    for (const t of grid) {
+      if (t.kind === "water") w++;
+      if (t.kind === "road") r++;
+    }
+    return { land: grid.length - w, water: w, roads: r };
   }, [grid]);
 
   useLayoutEffect(() => {
     let l = 0;
     let w = 0;
+    let r = 0;
     grid.forEach((t, i) => {
       const x = tileX(i);
       const z = tileZ(i);
@@ -47,6 +53,14 @@ export function Ground({ grid }: { grid: Tile[] }) {
       // A little per-tile variation keeps grass and forest from looking flat.
       tmpC.set(BASE[t.kind]).offsetHSL(0, 0, (hash(i, 3) - 0.5) * 0.05);
       land.current?.setColorAt(l++, tmpC);
+      if (t.kind === "road") {
+        const q = new THREE.Quaternion().setFromAxisAngle(
+          new THREE.Vector3(0, 1, 0),
+          Math.floor(hash(i, 42) * 4) * (Math.PI / 2),
+        );
+        tmpM.compose(new THREE.Vector3(x, 0.006, z), q, new THREE.Vector3(1, 1, 1));
+        roads.current?.setMatrixAt(r++, tmpM);
+      }
     });
     if (land.current) {
       land.current.count = l;
@@ -57,7 +71,21 @@ export function Ground({ grid }: { grid: Tile[] }) {
       water.current.count = w;
       water.current.instanceMatrix.needsUpdate = true;
     }
+    if (roads.current) {
+      roads.current.count = r;
+      roads.current.instanceMatrix.needsUpdate = true;
+    }
   }, [grid]);
+
+  const roadMap = useLoader(THREE.TextureLoader, "/textures/wet-asphalt.webp");
+  const roadMat = useMemo(() => {
+    roadMap.colorSpace = THREE.SRGBColorSpace;
+    roadMap.wrapS = THREE.RepeatWrapping;
+    roadMap.wrapT = THREE.RepeatWrapping;
+    roadMap.anisotropy = 8;
+    roadMap.needsUpdate = true;
+    return new THREE.MeshStandardMaterial({ map: roadMap, roughness: 0.88 });
+  }, [roadMap]);
 
   const waterMat = useMemo(() => {
     const m = new THREE.MeshStandardMaterial({
@@ -83,6 +111,14 @@ export function Ground({ grid }: { grid: Tile[] }) {
       >
         <boxGeometry args={[0.99, 0.1, 0.99]} />
         <meshStandardMaterial flatShading roughness={0.95} />
+      </instancedMesh>
+      <instancedMesh
+        ref={roads}
+        args={[undefined, roadMat, Math.max(1, counts.roads)]}
+        receiveShadow
+        frustumCulled={false}
+      >
+        <boxGeometry args={[0.99, 0.012, 0.99]} />
       </instancedMesh>
       <instancedMesh
         ref={water}
@@ -162,8 +198,13 @@ export function StreetLamps({ grid }: { grid: Tile[] }) {
 export const treeWind = { value: 1 };
 const treeTime = { value: 0 };
 
-function swayMaterial(color: string) {
-  const m = new THREE.MeshStandardMaterial({ color, flatShading: true, roughness: 0.85 });
+function swayMaterial(color: string, map?: THREE.Texture) {
+  const m = new THREE.MeshStandardMaterial({
+    color,
+    map,
+    flatShading: false,
+    roughness: 0.85,
+  });
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = treeTime;
     shader.uniforms.uWind = treeWind;
@@ -224,29 +265,68 @@ export function Trees({ grid }: { grid: Tile[] }) {
   const trunks = useRef<THREE.InstancedMesh>(null);
   const crowns = useRef<THREE.InstancedMesh>(null);
   const fronds = useRef<THREE.InstancedMesh>(null);
-  const crownMat = useMemo(() => swayMaterial("#ffffff"), []);
-  const frondMat = useMemo(() => swayMaterial("#5aa33c"), []);
+  const leafMap = useLoader(THREE.TextureLoader, "/textures/rain-tree-leaves.webp");
+  useMemo(() => {
+    leafMap.colorSpace = THREE.SRGBColorSpace;
+    leafMap.wrapS = THREE.RepeatWrapping;
+    leafMap.wrapT = THREE.RepeatWrapping;
+    leafMap.anisotropy = 8;
+    leafMap.needsUpdate = true;
+  }, [leafMap]);
+  const crownMat = useMemo(() => swayMaterial("#ffffff", leafMap), [leafMap]);
+  const frondMat = useMemo(() => swayMaterial("#ffffff", leafMap), [leafMap]);
 
   useLayoutEffect(() => {
     let c = 0;
     let f = 0;
     const q = new THREE.Quaternion();
     spots.forEach((sp, k) => {
-      const h = sp.palm ? 0.5 * sp.s : 0.24 * sp.s;
-      tmpM.compose(new THREE.Vector3(sp.x, h / 2, sp.z), q, new THREE.Vector3(sp.s, h / 0.3, sp.s));
+      const h = sp.palm ? 0.78 * sp.s : 0.34 * sp.s;
+      q.identity();
+      tmpM.compose(
+        new THREE.Vector3(sp.x, h / 2, sp.z),
+        q,
+        new THREE.Vector3(sp.palm ? 0.55 : sp.s, h / 0.3, sp.palm ? 0.55 : sp.s),
+      );
       trunks.current?.setMatrixAt(k, tmpM);
       if (sp.palm) {
-        tmpM.compose(new THREE.Vector3(sp.x, h, sp.z), q, new THREE.Vector3(sp.s, sp.s, sp.s));
-        fronds.current?.setMatrixAt(f++, tmpM);
+        for (let leaf = 0; leaf < 9; leaf++) {
+          const angle = (leaf / 9) * Math.PI * 2 + sp.shade * 0.5;
+          const dir = new THREE.Vector3(
+            Math.cos(angle),
+            -0.32 + hash(k, leaf) * 0.18,
+            Math.sin(angle),
+          );
+          q.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+          tmpM.compose(
+            new THREE.Vector3(sp.x, h, sp.z),
+            q,
+            new THREE.Vector3(0.26 * sp.s, 1.15 * sp.s, 0.2 * sp.s),
+          );
+          fronds.current?.setMatrixAt(f++, tmpM);
+        }
       } else {
-        tmpM.compose(
-          new THREE.Vector3(sp.x, h + 0.08 * sp.s, sp.z),
-          q,
-          new THREE.Vector3(sp.s * 1.1, sp.s * 0.75, sp.s * 1.1),
-        );
-        crowns.current?.setMatrixAt(c, tmpM);
-        tmpC.setHSL(0.27 + sp.shade * 0.08, 0.45, 0.3 + sp.shade * 0.12);
-        crowns.current?.setColorAt(c++, tmpC);
+        const clusters = [
+          [0, 0, 0],
+          [-0.38, -0.06, 0],
+          [0.38, -0.05, 0],
+          [0, -0.04, -0.36],
+          [0, -0.03, 0.36],
+        ];
+        clusters.forEach(([ox, oy, oz], leaf) => {
+          tmpM.compose(
+            new THREE.Vector3(sp.x + ox * sp.s, h + 0.18 * sp.s + oy * sp.s, sp.z + oz * sp.s),
+            q,
+            new THREE.Vector3(
+              (leaf === 0 ? 0.58 : 0.45) * sp.s,
+              (leaf === 0 ? 0.48 : 0.4) * sp.s,
+              (leaf === 0 ? 0.58 : 0.45) * sp.s,
+            ),
+          );
+          crowns.current?.setMatrixAt(c, tmpM);
+          tmpC.setHSL(0.27 + sp.shade * 0.08, 0.38, 0.38 + hash(k, leaf) * 0.08);
+          crowns.current?.setColorAt(c++, tmpC);
+        });
       }
     });
     if (trunks.current) {
@@ -268,12 +348,11 @@ export function Trees({ grid }: { grid: Tile[] }) {
     treeTime.value = clock.elapsedTime;
   });
 
-  const cap = spots.length + 1;
   return (
     <group>
       <instancedMesh
         ref={trunks}
-        args={[undefined, undefined, cap]}
+        args={[undefined, undefined, spots.length + 1]}
         castShadow
         frustumCulled={false}
       >
@@ -282,19 +361,19 @@ export function Trees({ grid }: { grid: Tile[] }) {
       </instancedMesh>
       <instancedMesh
         ref={crowns}
-        args={[undefined, crownMat, cap]}
+        args={[undefined, crownMat, Math.max(1, spots.length * 5)]}
         castShadow
         frustumCulled={false}
       >
-        <icosahedronGeometry args={[0.2, 0]} />
+        <sphereGeometry args={[0.2, 14, 10]} />
       </instancedMesh>
       <instancedMesh
         ref={fronds}
-        args={[undefined, frondMat, cap]}
+        args={[undefined, frondMat, Math.max(1, spots.length * 9)]}
         castShadow
         frustumCulled={false}
       >
-        <coneGeometry args={[0.22, 0.1, 7]} />
+        <coneGeometry args={[0.14, 1, 8]} />
       </instancedMesh>
     </group>
   );

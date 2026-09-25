@@ -137,7 +137,7 @@ function Line({ line, bus }: { line: RailLine; bus: WorldBus }) {
         frustumCulled={false}
       >
         <boxGeometry args={[0.14, 0.06, 1]} />
-        <meshStandardMaterial color="#a8a59d" flatShading />
+        <meshStandardMaterial color="#a8a59d" metalness={0.18} roughness={0.82} />
       </instancedMesh>
       <instancedMesh
         ref={pillarRef}
@@ -146,17 +146,17 @@ function Line({ line, bus }: { line: RailLine; bus: WorldBus }) {
         frustumCulled={false}
       >
         <cylinderGeometry args={[0.04, 0.05, DECK, 6]} />
-        <meshStandardMaterial color="#a19d94" flatShading />
+        <meshStandardMaterial color="#a19d94" roughness={0.88} />
       </instancedMesh>
       {track.pts.map((p, k) => (
         <group key={k} position={[p.x, DECK, p.z]}>
           <mesh castShadow position={[0, 0.02, 0]}>
             <boxGeometry args={[0.42, 0.04, 0.42]} />
-            <meshStandardMaterial color="#d8d4ca" flatShading />
+            <meshStandardMaterial color="#d8d4ca" roughness={0.76} />
           </mesh>
           <mesh castShadow position={[0, 0.26, 0]}>
             <boxGeometry args={[0.46, 0.03, 0.46]} />
-            <meshStandardMaterial color={line.color} flatShading />
+            <meshStandardMaterial color={line.color} metalness={0.14} roughness={0.45} />
           </mesh>
           {[-0.18, 0.18].map((x) => (
             <mesh key={x} position={[x, 0.14, 0]}>
@@ -175,7 +175,8 @@ function Line({ line, bus }: { line: RailLine; bus: WorldBus }) {
         <boxGeometry args={[0.16, 0.15, CAR_LEN]} />
         <meshStandardMaterial
           color={line.color}
-          flatShading
+          roughness={0.42}
+          metalness={0.2}
           emissive={line.color}
           emissiveIntensity={0.15}
         />
@@ -239,11 +240,11 @@ function Walkway({ line }: { line: RailLine }) {
         <group key={k} position={sg.pos} rotation={[0, sg.yaw, 0]}>
           <mesh castShadow receiveShadow>
             <boxGeometry args={[0.26, 0.04, sg.len]} />
-            <meshStandardMaterial color="#cfc9bc" flatShading />
+            <meshStandardMaterial color="#cfc9bc" roughness={0.8} />
           </mesh>
           <mesh castShadow position={[0, 0.2, 0]}>
             <boxGeometry args={[0.32, 0.03, sg.len]} />
-            <meshStandardMaterial color={line.color} flatShading />
+            <meshStandardMaterial color={line.color} roughness={0.5} />
           </mesh>
           {[-0.14, 0.14].map((x) => (
             <mesh key={x} position={[x, 0.1, 0]}>
@@ -272,7 +273,7 @@ function Walkway({ line }: { line: RailLine }) {
         frustumCulled={false}
       >
         <capsuleGeometry args={[0.03, 0.07, 2, 5]} />
-        <meshStandardMaterial flatShading />
+        <meshStandardMaterial roughness={0.7} />
       </instancedMesh>
     </group>
   );
