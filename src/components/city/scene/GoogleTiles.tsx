@@ -2,7 +2,12 @@ import { memo, useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { TilesAttributionOverlay, TilesPlugin, TilesRenderer } from "3d-tiles-renderer/r3f";
-import { GoogleCloudAuthPlugin, ReorientationPlugin } from "3d-tiles-renderer/plugins";
+import {
+  GLTFExtensionsPlugin,
+  GoogleCloudAuthPlugin,
+  ReorientationPlugin,
+} from "3d-tiles-renderer/plugins";
+import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import type { TilesRenderer as TilesRendererImpl } from "3d-tiles-renderer/three";
 import { env } from "./env";
 import {
@@ -29,8 +34,8 @@ export interface GoogleTilesProps {
   apiKey: string;
   /** Show the whole real city, rather than only what's around the map. */
   photo: boolean;
-  /** The key was refused or the tiles can't load. */
-  onFail: () => void;
+  /** The key was refused or the tiles can't load, and why. */
+  onFail: (reason: string) => void;
   /** The first tiles have arrived. */
   onReady: () => void;
 }
@@ -63,6 +68,11 @@ const PROBES = Array.from({ length: 16 }, (_, i) => [
   ((i % 4) - 1.5) * 16,
   (Math.floor(i / 4) - 1.5) * 16,
 ]);
+/** Give up if this many tiles fail before any loads. */
+const MAX_EARLY_ERRORS = 6;
+/** Google's tile meshes are Draco-compressed; the decoder is served from public/draco. */
+const DRACO_PATH = "/draco/";
+
 /** Stop re-measuring the ground after this many good readings. */
 const MAX_CALIBRATIONS = 6;
 
@@ -97,6 +107,8 @@ function GoogleTiles({ apiKey, photo, onFail, onReady }: GoogleTilesProps) {
   // Measure the ground under the map and sit it at y = 0, so the real
   // streets line up with the game's whatever the local ellipsoid height is.
   const calibrations = useRef(0);
+  const loaded = useRef(false);
+  const tileErrors = useRef(0);
 
   // Everything handed to the tiles renderer stays the same object across
   // renders: new plugin arguments would rebuild the plugin, and with it the
@@ -127,6 +139,7 @@ function GoogleTiles({ apiKey, photo, onFail, onReady }: GoogleTilesProps) {
           mesh.receiveShadow = false;
           materials.add(basic);
         });
+        loaded.current = true;
         ready.current();
       },
       onDisposeModel: ({ scene }: { scene: THREE.Object3D }) => {
@@ -137,10 +150,12 @@ function GoogleTiles({ apiKey, photo, onFail, onReady }: GoogleTilesProps) {
       },
       onLoadError: ({ tile, error }: { tile: unknown; error: Error }) => {
         // The root tileset (or the session behind it) failing means the key
-        // or the account isn't set up; a missing tile deeper down is fine.
-        if (tile) return;
-        console.warn("Google 3D tiles unavailable:", error?.message);
-        failed.current();
+        // or the account isn't set up. A missing tile deeper down is fine,
+        // but if tiles keep failing before any has loaded, they never will.
+        const reason = error?.message || "unknown error";
+        if (tile && (loaded.current || ++tileErrors.current < MAX_EARLY_ERRORS)) return;
+        console.warn("Google 3D tiles unavailable:", reason);
+        failed.current(reason);
       },
       onTilesLoadEnd: () => {
         const t = tiles.current;
@@ -164,6 +179,14 @@ function GoogleTiles({ apiKey, photo, onFail, onReady }: GoogleTilesProps) {
     () => [{ apiToken: apiKey, autoRefreshToken: true, logoUrl: GOOGLE_LOGO }],
     [apiKey],
   );
+  const draco = useMemo(() => new DRACOLoader().setDecoderPath(DRACO_PATH), []);
+  useEffect(
+    () => () => {
+      draco.dispose();
+    },
+    [draco],
+  );
+  const gltfArgs = useMemo(() => [{ dracoLoader: draco }], [draco]);
   const placeArgs = useMemo(
     () => [
       {
@@ -193,6 +216,7 @@ function GoogleTiles({ apiKey, photo, onFail, onReady }: GoogleTilesProps) {
         onTilesLoadEnd={handlers.onTilesLoadEnd}
       >
         <TilesPlugin plugin={GoogleCloudAuthPlugin} args={authArgs} />
+        <TilesPlugin plugin={GLTFExtensionsPlugin} args={gltfArgs} />
         <TilesPlugin plugin={ReorientationPlugin} args={placeArgs} />
         <TilesAttributionOverlay
           generateAttributions={credits}

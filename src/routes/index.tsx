@@ -183,11 +183,16 @@ function Index() {
       .then((r) => setMapsKey(r.key))
       .catch(() => undefined);
   }, []);
-  const mapsFailed = useCallback(() => {
+  const mapsFailed = useCallback((reason: string) => {
     setMapsKey(null);
     setPhoto(false);
+    // A 4xx from Google is the key's setup; anything else, say what broke.
+    const setup = /\b40[0-9]\b/.test(reason);
     toast("Google 3D tiles unavailable", {
-      description: "Check the Maps key's API and referrer restrictions, and billing.",
+      description: setup
+        ? "Google refused the Maps key: check that the Map Tiles API is enabled with billing, and that the key's referrer list includes this site."
+        : `The tiles couldn't load (${reason.slice(0, 120)}).`,
+      duration: 10000,
     });
   }, []);
   const [credits, setCredits] = useState<Credits>({ credits: MAX_CREDITS, since: 0 });

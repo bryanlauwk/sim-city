@@ -215,7 +215,7 @@ export interface CitySceneProps {
   /** Photo mode: Google's Kuala Lumpur instead of the game's city. */
   photo?: boolean;
   /** The Google tiles couldn't load (bad key, no billing, offline). */
-  onMapsFail?: () => void;
+  onMapsFail?: (reason: string) => void;
 }
 
 function CityScene({
@@ -256,9 +256,9 @@ function CityScene({
   const showCity = !(tiles && photo);
   const mapsFail = useRef(onMapsFail);
   mapsFail.current = onMapsFail;
-  const tilesFail = useCallback(() => {
+  const tilesFail = useCallback((reason: string) => {
     setTilesFailed(true);
-    mapsFail.current?.();
+    mapsFail.current?.(reason);
   }, []);
   // Real OpenStreetMap buildings on the tiles that still have them.
   const osm = useOsmBuildings();
