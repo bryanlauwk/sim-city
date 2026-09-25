@@ -4,6 +4,7 @@ import type { LabelSpec } from "./Labels";
 import * as THREE from "three";
 import type { Landmark, Tile } from "@/lib/city/types";
 import { tileX, tileZ } from "./common";
+import { Puffs } from "./vfx";
 import { useNormalMap, useSurfaceMap } from "./actorParts";
 import { textureProps } from "./textures";
 
@@ -565,46 +566,54 @@ export function LandmarkMesh({ lm }: { lm: Landmark }) {
   }
 }
 
+/** A burning building: flickering flames and a column of smoke, as soft particles. */
 function Fire({ seed, y }: { seed: number; y: number }) {
-  const ref = useRef<THREE.Group>(null);
-  useFrame(({ clock }) => {
-    const g = ref.current;
-    if (!g) return;
-    g.children.forEach((c, i) => {
-      const t = clock.elapsedTime * 6 + i * 1.7 + seed;
-      if (i < 3) c.scale.y = 0.8 + Math.sin(t) * 0.25;
-      else {
-        // Smoke drifts up and resets.
-        const k = (clock.elapsedTime * 0.5 + seed * 0.13 + i * 0.3) % 1;
-        c.position.y = 0.9 + k * 1.6;
-        c.scale.setScalar(0.6 + k * 1.2);
-        ((c as THREE.Mesh).material as THREE.MeshStandardMaterial).opacity = 0.55 * (1 - k);
-      }
-    });
+  const clock = useRef(0);
+  useFrame((state) => {
+    clock.current = state.clock.elapsedTime;
   });
+  const now = () => clock.current + seed;
   return (
-    <group ref={ref} position={[0, y, 0]} scale={1.3}>
-      {[
-        [0, 0, 0, 0.5],
-        [0.2, 0, 0.12, 0.35],
-        [-0.18, 0, -0.1, 0.4],
-      ].map(([x, yy, z, h], i) => (
-        <mesh key={i} position={[x, yy + h, z]}>
-          <coneGeometry args={[0.13, h * 2, 5]} />
-          <meshStandardMaterial
-            color={i === 0 ? "#ff7a1a" : "#ffc233"}
-            emissive="#ff5500"
-            emissiveIntensity={1.6}
-            roughness={0.94}
-          />
-        </mesh>
-      ))}
-      {[0, 1].map((k) => (
-        <mesh key={`s${k}`} position={[0, 1, 0]}>
-          <icosahedronGeometry args={[0.22, 0]} />
-          <meshStandardMaterial color="#3a3633" transparent opacity={0.5} roughness={0.96} />
-        </mesh>
-      ))}
+    <group position={[0, y, 0]}>
+      <Puffs
+        getT={now}
+        origin={[0, 0.05, 0]}
+        count={22}
+        duration={0.85}
+        spread={0.35}
+        rise={1.1}
+        size={[0.55, 0.14]}
+        color="#ff8a2e"
+        additive
+        loop
+        seed={seed}
+      />
+      <Puffs
+        getT={now}
+        origin={[0, 0.1, 0]}
+        count={10}
+        duration={0.6}
+        spread={0.2}
+        rise={0.6}
+        size={[0.35, 0.1]}
+        color="#ffd36a"
+        additive
+        loop
+        seed={seed + 7}
+      />
+      <Puffs
+        getT={now}
+        origin={[0, 0.7, 0]}
+        count={26}
+        duration={5}
+        spread={0.9}
+        rise={3.6}
+        size={[0.45, 2.2]}
+        color="#403a36"
+        opacity={0.7}
+        loop
+        seed={seed + 13}
+      />
     </group>
   );
 }

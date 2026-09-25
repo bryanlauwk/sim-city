@@ -87,6 +87,9 @@ export function Sky({ seed, day, chaos, pollution, getPhase, bus, shadows }: Pro
     env.hour = hour;
     env.night = isNight(hour);
     env.raining = raining;
+    env.daylight = daylight;
+    env.dusk = Math.max(0, 1 - Math.abs(elev) * 4);
+    env.hazy = now < bus.hazeUntil;
 
     // Irregular but seeded lightning flashes as a storm builds.
     if (raining && !wasRaining.current) nextLightning.current = now + 1.5;
@@ -98,13 +101,15 @@ export function Sky({ seed, day, chaos, pollution, getPhase, bus, shadows }: Pro
     }
     lightning.current = Math.max(0, lightning.current - dt * 4);
     bus.flash = lightning.current;
+    env.flash = lightning.current;
 
     // Sky colour: night → dusk → day, greyed by rain, tinted by chaos and smog.
     const dusk = Math.max(0, 1 - Math.abs(elev) * 4);
     target.copy(NIGHT).lerp(DAY, Math.min(1, daylight * 2.5));
     target.lerp(DUSK, dusk * 0.6);
     if (raining) target.lerp(RAIN, 0.6 * Math.max(0.3, daylight));
-    target.lerp(SMOG, Math.min(0.45, pollution / 180));
+    // Smog shows mostly by day; at night even a little turns the sky flat grey.
+    target.lerp(SMOG, Math.min(0.45, pollution / 180) * (0.3 + daylight * 0.7));
     const hazy = now < bus.hazeUntil;
     if (hazy) target.lerp(SMOG, 0.55);
     target.lerp(CHAOS, Math.min(0.5, chaos / 140));
@@ -112,7 +117,7 @@ export function Sky({ seed, day, chaos, pollution, getPhase, bus, shadows }: Pro
     sky.lerp(target, Math.min(1, dt * 3));
     scene.background = sky;
     gl.toneMappingExposure +=
-      (0.88 + daylight * 0.38 + lightning.current * 0.12 - gl.toneMappingExposure) *
+      (0.9 + daylight * 0.2 + lightning.current * 0.12 - gl.toneMappingExposure) *
       Math.min(1, dt * 2);
     if (scene.fog) {
       scene.fog.color.copy(sky);
@@ -133,8 +138,9 @@ export function Sky({ seed, day, chaos, pollution, getPhase, bus, shadows }: Pro
       moon.current.position.set(-18, 23, -12);
     }
     if (hemi.current) {
+      // The photographed sky (PhotoSky) adds its own soft fill by day.
       hemi.current.intensity =
-        (0.55 + daylight * 0.55) * (raining ? 0.75 : 1) + lightning.current * 1.5;
+        (0.5 + daylight * 0.25) * (raining ? 0.75 : 1) + lightning.current * 1.5;
       hemi.current.color.setHSL(env.night ? 0.62 : 0.12, 0.5, env.night ? 0.55 : 0.92);
     }
 

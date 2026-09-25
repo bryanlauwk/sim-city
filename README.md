@@ -19,6 +19,14 @@ A living, detailed procedural Kuala Lumpur. You type what happens to it ("a whal
   - Afternoon thunderstorms with lightning, and smog haze.
   - Trees sway in the wind.
 
+## Photoreal rendering
+
+- **A photographed sky** (`scene/PhotoSky.tsx`). Poly Haven's CC0 "Kloofendal 48d Partly Cloudy" HDRI lights the scene, so glass towers and PBR models reflect a real sky. A 2K photo of the same sky is drawn behind the skyline by day and fades into the dusk, storm, haze and night colours.
+- **Film-like finishing on larger screens** (`scene/PostFX.tsx`): ambient occlusion, bloom (stronger at night), ACES tone mapping and a light vignette. If the frame rate drops below about 28 fps, it switches itself off. `?fx=0` in the URL turns it off from the start.
+- **Real models for built-in actors** (`scene/realModels.ts`): a humpback whale, durian, baby tapir, rhinoceros hornbill, Komodo dragon, animated running T-Rex (the kaiju), UFO, hot-air balloon and a scanned asteroid (the meteor's rock, which keeps its fiery trail). They're CC BY models from Objaverse, loaded from Hugging Face when an event needs them and credited in the Gazette. The procedural actor stands in while one loads, and stays if it can't. Phones get only the models under 4 MB.
+- **Soft particle effects** (`scene/vfx.tsx`): billowing dust at impacts, spray and mist for whales and waves, a fireball and smoke column for meteors, and flames and smoke rising from burning buildings. Each effect is one GPU draw call.
+- **Older models load properly.** Many Sketchfab models store their colours in a retired glTF material extension; `scene/specGloss.ts` converts them so they don't load white.
+
 ## How it plays
 
 - **The city grows on its own.** One day passes every 12 seconds, or 3 seconds on fast-forward. Happy, solvent districts build new houses, shops and towers, each in their own character: towers in KLCC, shophouses in Chinatown, kampung houses in Kampung Baru. When free land runs out, the city sprawls into unprotected forest, which lowers the **Nature** score. It also rebuilds low-rise districts as high-rise. When smog gets bad, the council turns blocks into parks. The protected reserves (Lake Gardens, Bukit Nanas) are never cleared.
@@ -32,7 +40,7 @@ A living, detailed procedural Kuala Lumpur. You type what happens to it ("a whal
   - **KL wildlife:** a tapir, hornbill, giant monitor lizard and a durian that splits open.
   - **Festivals:** a lion dance with firecrackers, a Thaipusam procession, a Merdeka parade, festive lanterns and a hot-air balloon.
   - **Urban mishaps:** haze that thickens the sky, a sinkhole, a landslide, a blackout that turns the lights off, and an LRT breakdown that halts the trains.
-- **Animation and surfaces:** the camera closes in on event actors and follows roaming creatures; tapirs breathe and walk, hornbills bank and flap, durians split and scatter pulp, whales flex their fins and spray water, and kaiju stride and roar. Impacts throw up debris and dust. Normal maps add surface relief to animals, roads, plaster, wood and roof tiles. Wet roads develop puddles and reflections; storms bring slanted rain, drifting clouds and lightning. These are procedural, stylised assets rather than scanned photorealistic models.
+- **Animation and surfaces:** the camera closes in on event actors and follows roaming creatures; tapirs breathe and walk, hornbills bank and flap, durians split and scatter pulp, whales flex their fins and spray water, and kaiju stride and roar. Impacts throw up debris and dust. Normal maps add surface relief to animals, roads, plaster, wood and roof tiles. Wet roads develop puddles and reflections; storms bring slanted rain, drifting clouds and lightning.
 - **Event credits.** You get 5, and one refills every 10 minutes. Minor events cost 1 credit, citywide 2, apocalyptic 3.
 - **Your city, shareable.** The city is saved in the browser. The share button makes a link that replays the whole history. The simulation is deterministic, so a seed plus the event log rebuilds the city exactly.
 
@@ -102,6 +110,10 @@ Run `npm run test` (uses Bun) for the simulation tests.
 ## Credits
 
 The city itself is generated in code: buildings, landmarks, trees, vehicles, people and effects.
+
+The sky is Poly Haven's [Kloofendal 48d Partly Cloudy (Pure Sky)](https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky) by Greg Zaal and Jarod Guest (CC0).
+
+Real models for built-in actors (all CC BY 4.0, via Sketchfab and Objaverse): "Game-ready Humpback Whale" by Allie2k, "Durian" by rainonec, "Baby Tapir" by Mischa_Struggles, "Rhinoceros hornbill" by giunjay, "Komodo" by denys4624, "Animated Tyrannosaurus Rex Dinosaur Running Loop" by LasquetiSpice, "UfoV2" by Batuhan13, "The Getaway BALLOON2" by KevinAz61 and "Asteroid with minerals" by PeterMikielewicz.
 
 Ready-made models for custom actors come from [Objaverse](https://huggingface.co/datasets/allenai/objaverse) (ODC-BY; Deitke et al., 2023), selected with [Objaverse++](https://huggingface.co/datasets/cindyxl/ObjaversePlusPlus) labels (ODC-BY). Each model keeps its own CC BY or CC0 licence, and its author is credited in the Gazette whenever it appears.
 

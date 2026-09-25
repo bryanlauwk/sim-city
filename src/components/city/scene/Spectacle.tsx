@@ -26,7 +26,9 @@ import {
   type ActorProps,
 } from "./actorParts";
 import { ACTOR_LIBRARY, LIBRARY_IMPACT } from "./ActorLibrary";
+import { REAL_MODELS, type RealModel } from "./realModels";
 import { withSpecGloss } from "./specGloss";
+import { Puffs } from "./vfx";
 
 export { AFTERMATH };
 export interface SpectacleRun {
@@ -226,7 +228,7 @@ function GiantObject(p: ActorProps) {
 // Meteor
 // ---------------------------------------------------------------------------
 
-function Meteor({ a, focus, getT, impact, seed }: ActorProps) {
+function Meteor({ a, focus, getT, impact, seed, body }: ActorProps & { body?: RealModel }) {
   const rock = useRef<THREE.Group>(null);
   const trail = useRef<THREE.Group>(null);
   const s = 0.25 + a.size * 0.15;
@@ -244,6 +246,19 @@ function Meteor({ a, focus, getT, impact, seed }: ActorProps) {
     geometry.computeVertexNormals();
     return geometry;
   }, [seed]);
+  const proceduralRock = (
+    <mesh castShadow>
+      <primitive object={rockGeometry} attach="geometry" />
+      <Mat
+        color="#776151"
+        map={rockMap}
+        normalMap={rockNormal}
+        normalStrength={0.5}
+        roughness={0.94}
+        emissive="#6a2410"
+      />
+    </mesh>
+  );
   const start = useMemo(() => new THREE.Vector3(focus.x - 16, 24, focus.z - 9), [focus]);
   const end = useMemo(() => new THREE.Vector3(focus.x, 0.3, focus.z), [focus]);
   useFrame(() => {
@@ -267,17 +282,18 @@ function Meteor({ a, focus, getT, impact, seed }: ActorProps) {
   return (
     <>
       <group ref={rock} scale={s}>
-        <mesh castShadow>
-          <primitive object={rockGeometry} attach="geometry" />
-          <Mat
-            color="#776151"
-            map={rockMap}
-            normalMap={rockNormal}
-            normalStrength={0.5}
-            roughness={0.94}
-            emissive="#6a2410"
-          />
-        </mesh>
+        {body ? (
+          // A real scanned asteroid, centred where the procedural rock would be.
+          <ModelBoundary key={a.model_url} fallback={proceduralRock}>
+            <Suspense fallback={proceduralRock}>
+              <group position={[0, -0.85, 0]} scale={1.45}>
+                <ModelMesh url={a.model_url!} />
+              </group>
+            </Suspense>
+          </ModelBoundary>
+        ) : (
+          proceduralRock
+        )}
         <mesh scale={1.035}>
           <primitive object={rockGeometry} attach="geometry" />
           <meshBasicMaterial color="#ff6e28" transparent opacity={0.16} side={THREE.BackSide} />
@@ -1058,6 +1074,7 @@ function ImpactBurst({
   size,
   color,
   seed,
+  fiery = false,
 }: {
   focus: { x: number; z: number };
   getT: () => number;
@@ -1065,10 +1082,12 @@ function ImpactBurst({
   size: number;
   color: string;
   seed: number;
+  /** A meteor: a fireball and a column of smoke as well. */
+  fiery?: boolean;
 }) {
+  const since = () => getT() - impact;
   const ring = useRef<THREE.Mesh>(null);
   const debris = useRef<THREE.InstancedMesh>(null);
-  const plume = useRef<THREE.InstancedMesh>(null);
   const watery = color === "#d8f0ff";
   const parts = useMemo(
     () =>
@@ -1081,17 +1100,6 @@ function ImpactBurst({
         r: detail(seed, i, 197) * 6,
       })),
     [size, seed],
-  );
-  const clouds = useMemo(
-    () =>
-      Array.from({ length: 56 }, (_, i) => ({
-        angle: detail(seed, i, 433) * Math.PI * 2,
-        delay: detail(seed, i, 439) * 0.48,
-        speed: 0.75 + detail(seed, i, 443) * 1.35,
-        lift: 0.22 + detail(seed, i, 449) * 0.85,
-        scale: 0.65 + detail(seed, i, 457) * 0.95,
-      })),
-    [seed],
   );
   useFrame(() => {
     const lt = getT() - impact;
@@ -1120,34 +1128,6 @@ function ImpactBurst({
       m.setMatrixAt(i, tmpM);
     });
     m.instanceMatrix.needsUpdate = true;
-    const spray = plume.current;
-    if (!spray) return;
-    clouds.forEach((particle, i) => {
-      const age = lt - particle.delay;
-      const duration = watery ? 1.45 : 2.25;
-      if (age < 0 || age > duration) {
-        spray.setMatrixAt(i, HIDDEN);
-        return;
-      }
-      const spread = (0.85 + size * 0.16) * particle.speed * age;
-      const y = watery
-        ? 0.12 + particle.lift * age * 2 - 1.25 * age * age
-        : 0.1 + particle.lift * Math.sqrt(age) + age * 0.1;
-      if (y < 0) {
-        spray.setMatrixAt(i, HIDDEN);
-        return;
-      }
-      const radius = Math.max(0.001, Math.sin((Math.PI * age) / duration));
-      const scale = (watery ? 0.055 : 0.11) * particle.scale * radius;
-      tmpP.set(
-        focus.x + Math.cos(particle.angle) * spread,
-        y,
-        focus.z + Math.sin(particle.angle) * spread,
-      );
-      tmpM.compose(tmpP, tmpQ.identity(), tmpS.set(scale * 1.4, scale * 0.72, scale));
-      spray.setMatrixAt(i, tmpM);
-    });
-    spray.instanceMatrix.needsUpdate = true;
   });
   return (
     <>
@@ -1159,16 +1139,84 @@ function ImpactBurst({
         <boxGeometry args={[1, 1, 1]} />
         <meshStandardMaterial color={color} roughness={0.9} />
       </instancedMesh>
-      <instancedMesh ref={plume} args={[undefined, undefined, clouds.length]} frustumCulled={false}>
-        <sphereGeometry args={[1, 10, 8]} />
-        <meshPhysicalMaterial
-          color={watery ? "#e3f6f8" : "#aa9b85"}
-          roughness={0.9}
-          transparent
-          opacity={watery ? 0.5 : 0.3}
-          depthWrite={false}
+      {watery ? (
+        <>
+          {/* Spray thrown up and falling back, then a drifting mist. */}
+          <Puffs
+            getT={since}
+            origin={[focus.x, 0.2, focus.z]}
+            count={70}
+            duration={1.9}
+            stagger={0.25}
+            spread={1.4 + size * 0.35}
+            rise={5.5 + size * 0.5}
+            fall={5}
+            size={[0.25, 0.9]}
+            color="#f2fbff"
+            opacity={0.95}
+            seed={seed}
+          />
+          <Puffs
+            getT={since}
+            origin={[focus.x, 0.3, focus.z]}
+            count={34}
+            duration={5}
+            stagger={0.8}
+            spread={2 + size * 0.4}
+            rise={0.8}
+            size={[0.8, 2.6 + size * 0.3]}
+            color="#e6f3f7"
+            opacity={0.45}
+            seed={seed + 1}
+          />
+        </>
+      ) : (
+        // A billowing dust cloud rolling out from the impact.
+        <Puffs
+          getT={since}
+          origin={[focus.x, 0.15, focus.z]}
+          count={80}
+          duration={5.5}
+          stagger={0.5}
+          spread={1.6 + size * 0.45}
+          rise={1.2 + size * 0.25}
+          size={[0.5 + size * 0.08, 1.9 + size * 0.35]}
+          color="#b3a58e"
+          opacity={0.85}
+          seed={seed}
         />
-      </instancedMesh>
+      )}
+      {fiery && (
+        <>
+          <Puffs
+            getT={since}
+            origin={[focus.x, 0.4, focus.z]}
+            count={40}
+            duration={1.3}
+            stagger={0.12}
+            spread={1.4 + size * 0.25}
+            rise={2.2}
+            size={[0.6, 2.1]}
+            color="#ff8a3a"
+            opacity={0.75}
+            additive
+            seed={seed + 2}
+          />
+          <Puffs
+            getT={since}
+            origin={[focus.x, 0.6, focus.z]}
+            count={70}
+            duration={7}
+            stagger={3.5}
+            spread={0.9}
+            rise={5.5}
+            size={[0.7, 3]}
+            color="#3a3430"
+            opacity={0.8}
+            seed={seed + 3}
+          />
+        </>
+      )}
     </>
   );
 }
@@ -1189,11 +1237,19 @@ const FLYERS = new Set<ActorKind>([
   "fireworks",
 ]);
 
-/** Scale an object to a 1.2-unit footprint, resting on the ground. */
-function normalise(o: THREE.Object3D) {
+type Fit = "max" | "width" | "height";
+
+/** Scale an object so one dimension spans `span` units, resting on the ground. */
+function normalise(o: THREE.Object3D, fit: Fit = "max", span = 1.2) {
   const box = new THREE.Box3().setFromObject(o);
   const size = box.getSize(new THREE.Vector3());
-  const k = 1.2 / Math.max(size.x, size.y, size.z, 0.001);
+  const measured =
+    fit === "height"
+      ? size.y
+      : fit === "width"
+        ? Math.max(size.x, size.z)
+        : Math.max(size.x, size.y, size.z);
+  const k = span / Math.max(measured, 0.001);
   const centre = box.getCenter(new THREE.Vector3());
   o.scale.setScalar(k);
   o.position.set(-centre.x * k, -box.min.y * k, -centre.z * k);
@@ -1201,9 +1257,21 @@ function normalise(o: THREE.Object3D) {
 
 /**
  * A ready-made model, kept as authored with its own PBR materials and sized
- * to the actor. Animated models play their first clip on a loop.
+ * to the actor. Animated models loop a clip (the first, unless named).
  */
-function ModelMesh({ url }: { url: string }) {
+function ModelMesh({
+  url,
+  turn = 0,
+  fit = "max",
+  span = 1.2,
+  clip,
+}: {
+  url: string;
+  turn?: number;
+  fit?: Fit;
+  span?: number;
+  clip?: string;
+}) {
   const { scene, animations } = useGLTF(url, true, true, withSpecGloss);
   const object = useMemo(() => {
     // SkeletonUtils keeps skinned (animated) meshes bound to their own bones.
@@ -1216,18 +1284,22 @@ function ModelMesh({ url }: { url: string }) {
       // Skinned meshes move away from their bind-pose bounds.
       if ((m as THREE.SkinnedMesh).isSkinnedMesh) m.frustumCulled = false;
     });
-    normalise(o);
-    return o;
-  }, [scene]);
+    normalise(o, fit, span);
+    const turned = new THREE.Group();
+    turned.rotation.y = turn;
+    turned.add(o);
+    return turned;
+  }, [scene, turn, fit, span]);
   const mixer = useMemo(
     () => (animations.length ? new THREE.AnimationMixer(object) : null),
     [object, animations],
   );
   useEffect(() => {
     if (!mixer) return;
-    mixer.clipAction(animations[0]).play();
+    const chosen = (clip && animations.find((a) => a.name === clip)) || animations[0];
+    mixer.clipAction(chosen).play();
     return () => void mixer.stopAllAction();
-  }, [mixer, animations]);
+  }, [mixer, animations, clip]);
   useFrame((_, dt) => mixer?.update(Math.min(dt, 0.05)));
   return <primitive object={object} />;
 }
@@ -1391,10 +1463,9 @@ const HITS_GROUND = new Set<ActorKind>([
 ]);
 
 /** The component that plays one actor. */
-function ActorFor({ p, radius }: { p: ActorProps; radius: number }) {
-  const { a } = p;
-  if (a.model_url || a.recipe?.parts.length) return <CustomActor {...p} />;
-  switch (a.kind) {
+/** The hand-built actor for a kind. */
+function proceduralActor(p: ActorProps, radius: number): React.ReactNode {
+  switch (p.a.kind) {
     case "whale":
       return <Whale {...p} />;
     case "giant_object":
@@ -1420,10 +1491,58 @@ function ActorFor({ p, radius }: { p: ActorProps; radius: number }) {
     case "fireworks":
       return <Fireworks {...p} />;
     default: {
-      const Lib = ACTOR_LIBRARY[a.kind as keyof typeof ACTOR_LIBRARY];
+      const Lib = ACTOR_LIBRARY[p.a.kind as keyof typeof ACTOR_LIBRARY];
       return Lib ? <Lib {...p} /> : null;
     }
   }
+}
+
+/**
+ * A built-in actor played by its real model (see realModels.ts), moving the
+ * way its kind moves. The procedural actor stands in while the model loads,
+ * and stays if it can't be loaded.
+ */
+function RealActor({
+  p,
+  model,
+  fallback,
+}: {
+  p: ActorProps;
+  model: RealModel;
+  fallback: React.ReactNode;
+}) {
+  const body = (
+    <ModelMesh
+      url={p.a.model_url!}
+      turn={model.turn}
+      fit={model.fit}
+      span={model.span}
+      clip={model.clip}
+    />
+  );
+  const moving = WALKERS.has(p.a.kind) ? (
+    <Stomper {...p}>{body}</Stomper>
+  ) : FLYERS.has(p.a.kind) ? (
+    <Hover {...p}>{body}</Hover>
+  ) : (
+    <Faller {...p}>{body}</Faller>
+  );
+  return (
+    <ModelBoundary key={p.a.model_url} fallback={fallback}>
+      <Suspense fallback={fallback}>{moving}</Suspense>
+    </ModelBoundary>
+  );
+}
+
+/** The component that plays one actor. */
+function ActorFor({ p, radius }: { p: ActorProps; radius: number }) {
+  const { a } = p;
+  const real = !a.model_key && a.model_url ? REAL_MODELS[a.kind] : undefined;
+  // The meteor keeps its fiery fall and trail; only its rock becomes real.
+  if (real && a.kind === "meteor") return <Meteor {...p} body={real} />;
+  if (real) return <RealActor p={p} model={real} fallback={proceduralActor(p, radius)} />;
+  if (a.model_url || a.recipe?.parts.length) return <CustomActor {...p} />;
+  return proceduralActor(p, radius);
 }
 
 export function SpectacleView({
@@ -1441,13 +1560,15 @@ export function SpectacleView({
   const fired = useRef(false);
   const done = useRef(false);
   const impact = impactTime(run.actors);
-  const clockRef = useRef(0);
-  const getT = () => (start.current === null ? 0 : clockRef.current - start.current);
+  // Spectacle time advances at most 0.1 s a frame: a stalled frame (say,
+  // compiling a new model's shaders) pauses the show instead of skipping it.
+  const elapsed = useRef(0);
+  const getT = () => elapsed.current;
   const primary = run.actors[0];
 
-  useFrame(({ clock }) => {
-    clockRef.current = clock.elapsedTime;
+  useFrame(({ clock }, delta) => {
     if (start.current === null) start.current = clock.elapsedTime;
+    else elapsed.current += Math.min(delta, 0.1);
     const t = getT();
     const now = clock.elapsedTime;
     if (!fired.current && t >= impact) {
@@ -1526,6 +1647,7 @@ export function SpectacleView({
           size={primary.size}
           seed={run.id}
           color={primary.kind === "whale" || primary.kind === "wave" ? "#d8f0ff" : "#c9b89c"}
+          fiery={primary.kind === "meteor"}
         />
       )}
     </group>

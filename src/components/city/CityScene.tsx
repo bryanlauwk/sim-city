@@ -1,6 +1,6 @@
-import { memo, useEffect, useMemo, useRef } from "react";
+import { memo, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
+import { OrbitControls, PerformanceMonitor } from "@react-three/drei";
 import * as THREE from "three";
 import type { CityState } from "@/lib/city/types";
 import { KitBuildings, LocalHouses } from "./scene/Buildings";
@@ -10,6 +10,8 @@ import { Crossings, Ground, StreetLamps, Trees } from "./scene/Ground";
 import { KLStreetProps } from "./scene/KLStreetProps";
 import { preloadActorTextures } from "./scene/textures";
 import { Life } from "./scene/Life";
+import { PhotoSky } from "./scene/PhotoSky";
+import { PostFX } from "./scene/PostFX";
 import { Rail } from "./scene/Rail";
 import { Sky } from "./scene/Sky";
 import { SpectacleView, impactTime, type SpectacleRun } from "./scene/Spectacle";
@@ -100,7 +102,8 @@ function CameraDirector({ run }: { run: SpectacleRun | null }) {
     offset: THREE.Vector3;
   } | null>(null);
   const follow = useRef<{
-    start: number;
+    /** Seconds into the spectacle, stepped like its own clock. */
+    t: number;
     x: number;
     z: number;
     impact: number;
@@ -140,7 +143,7 @@ function CameraDirector({ run }: { run: SpectacleRun | null }) {
     if (kind === "kaiju" || kind === "creature") {
       const angle = hash(run.id * 31, 7) * Math.PI * 2;
       follow.current = {
-        start: clock.elapsedTime,
+        t: 0,
         x: Math.cos(angle),
         z: Math.sin(angle),
         impact: impactTime(run.actors),
@@ -154,7 +157,10 @@ function CameraDirector({ run }: { run: SpectacleRun | null }) {
     if (!controls) return;
     const tracking = follow.current;
     if (tracking) {
-      const t = c.elapsedTime - tracking.start;
+      // Same stepped clock as the spectacle, so a slow frame can't leave the
+      // camera ahead of the kaiju it's following.
+      tracking.t += Math.min(dt, 0.1);
+      const t = tracking.t;
       const pause = 2.5;
       const off =
         t < tracking.impact
@@ -211,6 +217,17 @@ function CityScene({
   showLabels,
 }: CitySceneProps) {
   const small = typeof window !== "undefined" && window.innerWidth < 640;
+  // Post-processing is for larger screens; "?fx=0" turns it off on slow GPUs.
+  const [fx, setFx] = useState(
+    () => !small && typeof window !== "undefined" && !/[?&]fx=0\b/.test(window.location.search),
+  );
+  // Watch the frame rate once loading has settled; a GPU that can't keep up
+  // drops the post-processing rather than the whole experience.
+  const [watchFps, setWatchFps] = useState(false);
+  useEffect(() => {
+    const id = setTimeout(() => setWatchFps(true), 6000);
+    return () => clearTimeout(id);
+  }, []);
   const bus = useMemo(createBus, []);
   // Fetch actor textures in the background once the city is up, so the
   // first whale or kaiju of the session doesn't wait on a download.
@@ -261,7 +278,7 @@ function CityScene({
     <div className="relative h-full w-full">
       <Canvas
         shadows={small ? false : "percentage"}
-        dpr={[1, small ? 1.5 : 2]}
+        dpr={[1, small || fx ? 1.5 : 2]}
         camera={{ position: OPENING_CAMERA, fov: 40, far: 200 }}
         gl={{
           antialias: true,
@@ -280,6 +297,10 @@ function CityScene({
           shadows={!small}
         />
         <ActionLights run={spectacle} />
+        {/* The photographed sky streams in after the city; until then <Sky>'s colour shows. */}
+        <Suspense fallback={null}>
+          <PhotoSky />
+        </Suspense>
         <Shaker bus={bus}>
           <Ground grid={city.grid} />
           <Trees grid={city.grid} />
@@ -312,6 +333,14 @@ function CityScene({
           minPolarAngle={0.3}
         />
         <LabelProjector specs={labels} registry={registry} />
+        {fx && <PostFX />}
+        {fx && watchFps && (
+          <PerformanceMonitor
+            bounds={() => [28, 55]}
+            flipflops={1}
+            onDecline={() => setFx(false)}
+          />
+        )}
       </Canvas>
       <LabelOverlay specs={labels} registry={registry} showLandmarks={showLabels && !spectacle} />
     </div>
