@@ -1282,6 +1282,42 @@ const HITS_GROUND = new Set<ActorKind>([
   "tornado",
 ]);
 
+/** The component that plays one actor. */
+function ActorFor({ p, radius, fresh }: { p: ActorProps; radius: number; fresh: boolean }) {
+  const { a } = p;
+  if (a.model_url) return <GeneratedActor {...p} fresh={fresh} />;
+  switch (a.kind) {
+    case "whale":
+      return <Whale {...p} />;
+    case "giant_object":
+      return <GiantObject {...p} />;
+    case "meteor":
+      return <Meteor {...p} />;
+    case "kaiju":
+      return <Kaiju {...p} />;
+    case "creature":
+      return <Creature {...p} />;
+    case "ufo":
+      return <Ufo {...p} />;
+    case "tornado":
+      return <Tornado {...p} />;
+    case "wave":
+      return <Wave {...p} />;
+    case "storm":
+      return <Storm {...p} />;
+    case "swarm":
+      return <Swarm {...p} />;
+    case "rain_of":
+      return <RainOf {...p} radius={radius} />;
+    case "fireworks":
+      return <Fireworks {...p} />;
+    default: {
+      const Lib = ACTOR_LIBRARY[a.kind as keyof typeof ACTOR_LIBRARY];
+      return Lib ? <Lib {...p} /> : null;
+    }
+  }
+}
+
 export function SpectacleView({
   run,
   bus,
@@ -1357,47 +1393,24 @@ export function SpectacleView({
 
   return (
     <group>
-      {run.actors.map((a, i) => {
-        const p: ActorProps = {
-          a,
-          focus: run.focus,
-          getT,
-          impact: i === 0 ? impact : IMPACT_AT[a.kind],
-          bus,
-          seed: run.id * 31 + i,
-        };
-        if (a.model_url) return <GeneratedActor key={i} {...p} fresh={!!run.fresh} />;
-        switch (a.kind) {
-          case "whale":
-            return <Whale key={i} {...p} />;
-          case "giant_object":
-            return <GiantObject key={i} {...p} />;
-          case "meteor":
-            return <Meteor key={i} {...p} />;
-          case "kaiju":
-            return <Kaiju key={i} {...p} />;
-          case "creature":
-            return <Creature key={i} {...p} />;
-          case "ufo":
-            return <Ufo key={i} {...p} />;
-          case "tornado":
-            return <Tornado key={i} {...p} />;
-          case "wave":
-            return <Wave key={i} {...p} />;
-          case "storm":
-            return <Storm key={i} {...p} />;
-          case "swarm":
-            return <Swarm key={i} {...p} />;
-          case "rain_of":
-            return <RainOf key={i} {...p} radius={run.radius} />;
-          case "fireworks":
-            return <Fireworks key={i} {...p} />;
-          default: {
-            const Lib = ACTOR_LIBRARY[a.kind as keyof typeof ACTOR_LIBRARY];
-            return Lib ? <Lib key={i} {...p} /> : null;
-          }
-        }
-      })}
+      {run.actors.map((a, i) => (
+        // An actor whose texture is still downloading must not take the whole
+        // city down with it: it simply appears once its texture arrives.
+        <Suspense key={i} fallback={null}>
+          <ActorFor
+            p={{
+              a,
+              focus: run.focus,
+              getT,
+              impact: i === 0 ? impact : IMPACT_AT[a.kind],
+              bus,
+              seed: run.id * 31 + i,
+            }}
+            radius={run.radius}
+            fresh={!!run.fresh}
+          />
+        </Suspense>
+      ))}
       {primary && HITS_GROUND.has(primary.kind) && (
         <ImpactBurst
           focus={run.focus}

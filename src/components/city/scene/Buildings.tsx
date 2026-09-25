@@ -33,9 +33,9 @@ export function facing(grid: Tile[], i: number): number {
  */
 function facadeMaterial(kind: KitMat, map?: THREE.Texture, normalMap?: THREE.Texture) {
   const m = new THREE.MeshStandardMaterial({
-    map,
-    normalMap,
-    normalScale: new THREE.Vector2(0.18, 0.18),
+    // Only the textures this kind has; three.js warns about undefined ones.
+    ...(map ? { map } : {}),
+    ...(normalMap ? { normalMap, normalScale: new THREE.Vector2(0.18, 0.18) } : {}),
     flatShading: false,
     roughness: kind === "glass" ? 0.25 : 0.85,
     metalness: kind === "glass" ? 0.1 : 0,

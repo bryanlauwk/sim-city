@@ -30,7 +30,8 @@ def derive(name: str, strength: float) -> None:
     high_pass = ImageChops.subtract(
         source, source.filter(ImageFilter.GaussianBlur(radius=8)), offset=128
     )
-    heights = list(high_pass.getdata())
+    flatten = getattr(high_pass, "get_flattened_data", high_pass.getdata)
+    heights = list(flatten())
     width, height = source.size
     pixels = bytearray(width * height * 3)
 

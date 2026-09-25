@@ -272,7 +272,7 @@ const treeTime = { value: 0 };
 function swayMaterial(color: string, map?: THREE.Texture) {
   const m = new THREE.MeshStandardMaterial({
     color,
-    map,
+    ...(map ? { map } : {}),
     flatShading: false,
     roughness: 0.85,
   });
