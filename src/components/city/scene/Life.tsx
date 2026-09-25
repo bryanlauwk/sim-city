@@ -108,17 +108,20 @@ interface Vehicle {
   size?: number;
 }
 
+// 1985 on the road: station wagons in wood-panel brown, sedans in maroon,
+// harvest gold and avocado, the odd red pickup.
 const CAR_COLORS = [
-  "#d8d8d8",
-  "#2b2b2b",
-  "#b3202a",
-  "#f2f2f2",
-  "#1f4e8c",
-  "#8c8c8c",
-  "#d9a41e",
+  "#7a5a3a",
+  "#6e2230",
+  "#c9a24a",
   "#5b6b3a",
+  "#e8e2d0",
+  "#2f4a6b",
+  "#8c8c8c",
+  "#a8322a",
 ];
-const BIKE_COLORS = ["#222", "#c0392b", "#2c3e50", "#7f8c8d"];
+// Kids on BMX bikes.
+const BIKE_COLORS = ["#e84393", "#1b998b", "#f18f01", "#d7263d", "#2e86ab", "#ffbe0b"];
 
 function lanePosition(v: Vehicle, out: THREE.Vector3): number {
   const ax = tileX(v.from);
@@ -131,8 +134,8 @@ function lanePosition(v: Vehicle, out: THREE.Vector3): number {
   dx /= len;
   dz /= len;
   const t = Math.min(1, v.t);
-  // Malaysia drives on the left.
-  out.set(ax + (bx - ax) * t + dz * 0.2, 0.06, az + (bz - az) * t - dx * 0.2);
+  // Keep to the right.
+  out.set(ax + (bx - ax) * t - dz * 0.2, 0.06, az + (bz - az) * t + dx * 0.2);
   return Math.atan2(dx, dz);
 }
 
@@ -301,13 +304,13 @@ export function Life({ city, bus }: { city: CityState; bus: WorldBus }) {
   const pop = city.stats.population;
   const nature = natureScore(grid, city.stats.pollution);
 
-  const carCount = Math.round(Math.min(170, Math.max(40, pop / 7000)));
-  const cars = useVehicles(grid, graph, carCount, 1.6, CAR_COLORS);
-  const bikes = useVehicles(grid, graph, Math.round(carCount * 0.5), 2.3, BIKE_COLORS);
-  const buses = useVehicles(grid, graph, 10, 1.1, ["#d63a2f", "#f4f4f4"]);
+  const carCount = Math.round(Math.min(90, Math.max(30, pop / 60)));
+  const cars = useVehicles(grid, graph, carCount, 1.5, CAR_COLORS);
+  const bikes = useVehicles(grid, graph, Math.round(carCount * 0.4), 1.9, BIKE_COLORS);
+  const buses = useVehicles(grid, graph, 4, 1.1, ["#f2b705"]);
   const special = useRef<Vehicle[]>([]);
 
-  const walkerCount = Math.round(Math.min(320, Math.max(80, pop / 4000)));
+  const walkerCount = Math.round(Math.min(220, Math.max(60, pop / 25)));
   const walkers = useRef<Walker[]>([]);
   const walkerColors = useRef<THREE.Color[]>([]);
   const walkerSkinColors = useRef<THREE.Color[]>([]);
@@ -437,7 +440,7 @@ export function Life({ city, bus }: { city: CityState; bus: WorldBus }) {
     const now = state.clock.elapsedTime;
     bus.now = now;
     const night = env.night;
-    const jam = (city.stats.chaos > 50 ? 0.45 : 1) * (env.raining ? 0.75 : 1);
+    const jam = (city.stats.rift > 50 ? 0.45 : 1) * (env.raining ? 0.75 : 1);
 
     while (bus.spawns.length) spawnSpecial(bus.spawns.shift()!);
     bus.disturbances = bus.disturbances.filter((d) => d.until > now);
@@ -648,7 +651,7 @@ export function Life({ city, bus }: { city: CityState; bus: WorldBus }) {
       }
     }
 
-    // Macaques hop between trees; monitor lizards patrol the riverbanks.
+    // Deer wander the woods and parks; ducks paddle along the shore.
     const mm = monkeyMesh.current;
     if (mm) {
       monkeys.current.forEach((w, k) => {
@@ -838,12 +841,12 @@ export function Life({ city, bus }: { city: CityState; bus: WorldBus }) {
         castShadow
         frustumCulled={false}
       >
-        <dodecahedronGeometry args={[0.05, 0]} />
+        <capsuleGeometry args={[0.03, 0.08, 2, 6]} />
         <meshStandardMaterial color="#8a6a45" flatShading />
       </instancedMesh>
       <instancedMesh ref={lizardMesh} args={[undefined, undefined, 10]} frustumCulled={false}>
-        <boxGeometry args={[0.05, 0.025, 0.22]} />
-        <meshStandardMaterial color="#4f5a3a" flatShading />
+        <boxGeometry args={[0.04, 0.035, 0.07]} />
+        <meshStandardMaterial color="#efeee6" flatShading />
       </instancedMesh>
       <instancedMesh ref={birdMesh} args={[birdGeo, undefined, 60]} frustumCulled={false}>
         <meshStandardMaterial color="#222222" flatShading />

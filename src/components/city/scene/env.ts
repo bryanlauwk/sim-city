@@ -10,4 +10,8 @@ export const env = {
   hazy: false,
   /** 1 on a lightning flash, fading to 0. */
   flash: 0,
+  /** Looking at the Upside Down rather than the town. */
+  upside: false,
+  /** 0–100: how far the Upside Down has broken through. */
+  rift: 0,
 };

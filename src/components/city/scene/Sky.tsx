@@ -10,7 +10,11 @@ const DAY = new THREE.Color("#bcdcf0");
 const DUSK = new THREE.Color("#f1a36c");
 const NIGHT = new THREE.Color("#1c2a4a");
 const RAIN = new THREE.Color("#8d9aa4");
-const CHAOS = new THREE.Color("#d9714f");
+const RIFT = new THREE.Color("#6a1c26");
+const UPSIDE_DAY = new THREE.Color("#2c3440");
+const UPSIDE_NIGHT = new THREE.Color("#0e1118");
+const RED_FLASH = new THREE.Color("#ff2a2a");
+const WHITE = new THREE.Color("#ffffff");
 const SMOG = new THREE.Color("#b7ab86");
 
 const RAIN_DROPS = 700;
@@ -19,14 +23,16 @@ const RAIN_AXIS = new THREE.Vector3(0, 0, 1);
 interface Props {
   seed: number;
   day: number;
-  chaos: number;
+  rift: number;
   pollution: number;
+  /** Show the Upside Down's sky instead of the town's. */
+  upside: boolean;
   getPhase: () => number;
   bus: WorldBus;
   shadows: boolean;
 }
 
-export function Sky({ seed, day, chaos, pollution, getPhase, bus, shadows }: Props) {
+export function Sky({ seed, day, rift, pollution, upside, getPhase, bus, shadows }: Props) {
   const { scene, gl } = useThree();
   const sun = useRef<THREE.DirectionalLight>(null);
   const moon = useRef<THREE.DirectionalLight>(null);
@@ -82,14 +88,18 @@ export function Sky({ seed, day, chaos, pollution, getPhase, bus, shadows }: Pro
     const elev = Math.sin(((hour - 6) / 12) * Math.PI);
     const daylight = Math.max(0, elev);
     const stormy = now < bus.stormUntil;
-    // KL's famous afternoon thunderstorms, on roughly a third of days.
-    const raining = stormy || (hash(seed, day) < 0.33 && hour > 15 && hour < 18.5);
+    // October showers on about one day in five; never in the Upside Down.
+    const raining = !upside && (stormy || (hash(seed, day) < 0.2 && hour > 14 && hour < 18.5));
     env.hour = hour;
     env.night = isNight(hour);
     env.raining = raining;
     env.daylight = daylight;
     env.dusk = Math.max(0, 1 - Math.abs(elev) * 4);
     env.hazy = now < bus.hazeUntil;
+    env.upside = upside;
+    env.rift = rift;
+    // Red lightning: always in the Upside Down, over the town once the rift is wide.
+    const redStorm = upside || rift > 70 || now < bus.redStormUntil;
 
     // Irregular but seeded lightning flashes as a storm builds.
     if (raining && !wasRaining.current) nextLightning.current = now + 1.5;
@@ -99,39 +109,64 @@ export function Sky({ seed, day, chaos, pollution, getPhase, bus, shadows }: Pro
       nextLightning.current =
         now + (stormy ? 0.8 : 4) + hash(seed + day, Math.floor(now * 7)) * (stormy ? 1.4 : 3);
     }
+    if (redStorm && !raining && now >= nextLightning.current) {
+      lightning.current = upside ? 0.7 : 0.5;
+      nextLightning.current = now + 3 + hash(seed + day, Math.floor(now * 5)) * 7;
+    }
     lightning.current = Math.max(0, lightning.current - dt * 4);
     bus.flash = lightning.current;
     env.flash = lightning.current;
 
-    // Sky colour: night → dusk → day, greyed by rain, tinted by chaos and smog.
+    // Sky colour: night → dusk → day, greyed by rain, tinted by smog and the rift.
     const dusk = Math.max(0, 1 - Math.abs(elev) * 4);
-    target.copy(NIGHT).lerp(DAY, Math.min(1, daylight * 2.5));
-    target.lerp(DUSK, dusk * 0.6);
-    if (raining) target.lerp(RAIN, 0.6 * Math.max(0.3, daylight));
-    // Smog shows mostly by day; at night even a little turns the sky flat grey.
-    target.lerp(SMOG, Math.min(0.45, pollution / 180) * (0.3 + daylight * 0.7));
     const hazy = now < bus.hazeUntil;
-    if (hazy) target.lerp(SMOG, 0.55);
-    target.lerp(CHAOS, Math.min(0.5, chaos / 140));
-    if (lightning.current > 0) target.lerp(new THREE.Color("#ffffff"), lightning.current * 0.6);
+    if (upside) {
+      // A cold, dim, ash-filled sky whatever the hour.
+      target.copy(UPSIDE_NIGHT).lerp(UPSIDE_DAY, Math.min(1, daylight * 1.6));
+    } else {
+      target.copy(NIGHT).lerp(DAY, Math.min(1, daylight * 2.5));
+      target.lerp(DUSK, dusk * 0.6);
+      if (raining) target.lerp(RAIN, 0.6 * Math.max(0.3, daylight));
+      // Smog shows mostly by day; at night even a little turns the sky flat grey.
+      target.lerp(SMOG, Math.min(0.45, pollution / 180) * (0.3 + daylight * 0.7));
+      if (hazy) target.lerp(SMOG, 0.55);
+      // The rift stains the sky red, mostly after dark.
+      target.lerp(RIFT, Math.min(0.55, rift / 150) * (1 - daylight * 0.6));
+    }
+    if (lightning.current > 0)
+      target.lerp(
+        redStorm && !raining ? RED_FLASH : WHITE,
+        lightning.current * (redStorm ? 0.35 : 0.6),
+      );
     sky.lerp(target, Math.min(1, dt * 3));
     scene.background = sky;
+    const exposure = upside ? 0.8 + daylight * 0.1 : 0.9 + daylight * 0.2;
     gl.toneMappingExposure +=
-      (0.9 + daylight * 0.2 + lightning.current * 0.12 - gl.toneMappingExposure) *
-      Math.min(1, dt * 2);
+      (exposure + lightning.current * 0.12 - gl.toneMappingExposure) * Math.min(1, dt * 2);
     if (scene.fog) {
       scene.fog.color.copy(sky);
       const fog = scene.fog as THREE.Fog;
-      fog.far = (95 - pollution * 0.45 - (raining ? 25 : 0)) * (hazy ? 0.4 : 1);
-      fog.near = fog.far * 0.45;
+      if (upside) {
+        fog.far = 58;
+        fog.near = 12;
+      } else {
+        fog.far = (95 - pollution * 0.45 - (raining ? 25 : 0) - rift * 0.25) * (hazy ? 0.4 : 1);
+        fog.near = fog.far * 0.45;
+      }
     }
 
     // Sun and sky light.
     const az = ((hour - 6) / 12) * Math.PI;
     if (sun.current) {
       sun.current.position.set(Math.cos(az) * 22, 4 + daylight * 24, 10 + Math.sin(az) * 4);
-      sun.current.intensity = (0.03 + daylight * 2.25) * (raining ? 0.36 : 1);
-      sun.current.color.setHSL(0.09, 0.8, 0.6 + daylight * 0.35);
+      if (upside) {
+        sun.current.intensity = 0.25 + daylight * 0.45 + lightning.current * 2.5;
+        sun.current.color.set(lightning.current > 0.05 ? "#ff5a4a" : "#9fb0c8");
+      } else {
+        sun.current.intensity = (0.03 + daylight * 2.25) * (raining ? 0.36 : 1);
+        sun.current.color.setHSL(0.09, 0.8, 0.6 + daylight * 0.35);
+        if (redStorm && lightning.current > 0.05) sun.current.color.set("#ff6a5a");
+      }
     }
     if (moon.current) {
       moon.current.intensity = (1 - daylight) * (env.night ? 0.4 : 0.06);
@@ -139,16 +174,24 @@ export function Sky({ seed, day, chaos, pollution, getPhase, bus, shadows }: Pro
     }
     if (hemi.current) {
       // The photographed sky (PhotoSky) adds its own soft fill by day.
-      hemi.current.intensity =
-        (0.5 + daylight * 0.25) * (raining ? 0.75 : 1) + lightning.current * 1.5;
-      hemi.current.color.setHSL(env.night ? 0.62 : 0.12, 0.5, env.night ? 0.55 : 0.92);
+      if (upside) {
+        hemi.current.intensity = 0.45 + daylight * 0.2 + lightning.current * 1.2;
+        hemi.current.color.set("#7d8fb0");
+        hemi.current.groundColor.set("#1a1d24");
+      } else {
+        hemi.current.groundColor.set("#5f7552");
+        hemi.current.intensity =
+          (0.5 + daylight * 0.25) * (raining ? 0.75 : 1) + lightning.current * 1.5;
+        hemi.current.color.setHSL(env.night ? 0.62 : 0.12, 0.5, env.night ? 0.55 : 0.92);
+      }
     }
 
     const glow = env.night ? 1 : Math.max(0, 1 - daylight * 5);
-    // A blackout kills the city's lights.
+    // A blackout kills the town's lights; a wide rift makes them flicker.
     const powerOut = now < bus.blackoutUntil;
-    buildingGlow.value = powerOut ? 0 : glow * 0.5;
-    lampGlow.value = powerOut ? 0 : glow;
+    const flicker = rift > 40 && hash(Math.floor(now * 9), 17) < (rift - 40) / 160 ? 0.15 : 1;
+    buildingGlow.value = powerOut ? 0 : glow * 0.5 * flicker;
+    lampGlow.value = powerOut ? 0 : glow * flicker;
     treeWind.value = raining ? 3 : 1;
 
     // Rain.
@@ -177,7 +220,9 @@ export function Sky({ seed, day, chaos, pollution, getPhase, bus, shadows }: Pro
     // Drifting clouds, darker and lower in a storm.
     const c = clouds.current;
     if (c) {
-      cloudMat.color.set(raining ? "#6f7780" : env.night ? "#3a4560" : "#ffffff");
+      cloudMat.color.set(
+        upside ? "#1d2129" : raining ? "#6f7780" : env.night ? "#3a4560" : "#ffffff",
+      );
       cloudSpots.forEach((s, k) => {
         s.a += dt * s.speed;
         for (let lobe = 0; lobe < 4; lobe++) {

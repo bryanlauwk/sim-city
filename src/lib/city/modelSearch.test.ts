@@ -76,7 +76,7 @@ describe("free model search", () => {
       headline: "x",
       subhead: "",
       quotes: [],
-      stat_changes: { population: 0, happiness: 0, money: 0, pollution: 0, chaos: 0 },
+      stat_changes: { population: 0, happiness: 0, money: 0, pollution: 0, rift: 0 },
       tile_ops: [],
       ongoing: null,
       followups: [],

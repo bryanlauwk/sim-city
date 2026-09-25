@@ -10,13 +10,10 @@ export function textureProps(map?: THREE.Texture, normalMap?: THREE.Texture, str
 }
 
 /** Every texture an actor can load mid-event, so they can be fetched ahead of time. */
-export const ACTOR_TEXTURES = [
-  "whale-skin",
-  "kaiju-scales",
-  "tapir-fur",
-  "hornbill-feather",
-  "durian-rind",
-].flatMap((name) => [`/textures/${name}.webp`, `/textures/${name}.normal.webp`]);
+export const ACTOR_TEXTURES = ["whale-skin", "kaiju-scales"].flatMap((name) => [
+  `/textures/${name}.webp`,
+  `/textures/${name}.normal.webp`,
+]);
 
 /**
  * Warm the texture cache once the city is on screen. An actor whose texture

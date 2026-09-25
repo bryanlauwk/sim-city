@@ -1,6 +1,6 @@
 /// <reference types="bun" />
 import { describe, expect, test } from "bun:test";
-import { districtAt } from "./kl";
+import { districtAt, RAILROAD } from "./hollow";
 import { eventResultSchema } from "./schema";
 import { applyEvent, countKinds, createCity, replay, tick } from "./simulation";
 import type { EventResult } from "./types";
@@ -10,7 +10,7 @@ const meteor: EventResult = eventResultSchema.parse({
   headline: "Meteor lands downtown, parking still available",
   subhead: "Officials describe the crater as 'roomy'.",
   quotes: [{ name: "Gus", role: "Parking warden", text: "Still a two-hour zone." }],
-  stat_changes: { population: -40, happiness: -10, money: -500, pollution: 10, chaos: 20 },
+  stat_changes: { population: -40, happiness: -10, money: -500, pollution: 10, rift: 20 },
   tile_ops: [
     { op: "destroy", target: "center", count: 4, build_kind: null, landmark: null },
     {
@@ -25,7 +25,7 @@ const meteor: EventResult = eventResultSchema.parse({
   ongoing: {
     label: "Crater tourism",
     duration_days: 5,
-    per_day: { population: 0, happiness: 1, money: 20, pollution: 0, chaos: 0 },
+    per_day: { population: 0, happiness: 1, money: 20, pollution: 0, rift: 0 },
   },
   spectacle: {
     actors: [
@@ -37,24 +37,27 @@ const meteor: EventResult = eventResultSchema.parse({
   followups: [
     {
       delay_days: 2,
-      note: "Crater declared a heritage site; hawker stalls move in.",
-      stat_changes: { population: 0, happiness: 3, money: 500, pollution: 0, chaos: 0 },
+      note: "Crater declared a historic site; a hot dog stand moves in.",
+      stat_changes: { population: 0, happiness: 3, money: 500, pollution: 0, rift: 0 },
       tile_ops: [{ op: "build", target: "center", count: 2, build_kind: "shop", landmark: null }],
     },
   ],
 });
 
 describe("city simulation", () => {
-  test("seeded city has KL's roads, rivers, landmarks and residents", () => {
+  test("seeded town has Maple Hollow's streets, lake, woods, railroad and landmarks", () => {
     const s = createCity(42);
     const c = countKinds(s.grid);
-    expect(s.name).toBe("Kuala Lumpur");
+    expect(s.name).toBe("Maple Hollow");
     expect(c.road).toBeGreaterThan(150);
-    expect(c.water).toBeGreaterThan(2);
-    expect(c.forest).toBeGreaterThan(25);
-    expect(s.grid.some((t) => t.landmark?.name === "Pavilion Kuala Lumpur")).toBe(true);
-    expect(s.grid.some((t) => t.landmark?.name === "Merdeka 118")).toBe(true);
-    expect(s.grid.some((t) => t.landmark?.name === "Petronas Twin Towers")).toBe(true);
+    expect(c.water).toBeGreaterThan(10);
+    expect(c.forest).toBeGreaterThan(60);
+    expect(c.rail).toBeGreaterThan(20);
+    for (const name of ["Hollow Point Lab", "Maple Hollow water tower", "Hawthorne House"])
+      expect(s.grid.some((t) => t.landmark?.name === name)).toBe(true);
+    // Nothing gets built on the tracks.
+    const row = s.grid.slice(RAILROAD.row * 32, RAILROAD.row * 32 + 32);
+    expect(row.every((t) => t.kind === "rail" || t.kind === "road")).toBe(true);
     expect(c.house + c.shop + c.tower).toBeGreaterThan(10);
     expect(s.stats.population).toBeGreaterThan(0);
     expect(s.name.length).toBeGreaterThan(3);
@@ -75,7 +78,7 @@ describe("city simulation", () => {
     let s = createCity(3);
     for (let i = 0; i < 5; i++) s = tick(s);
     const next = applyEvent(s, "a meteor hits downtown", meteor);
-    expect(countKinds(next.grid).landmark).toBe(countKinds(s.grid).landmark + 1);
+    expect(next.grid.some((t) => t.landmark?.name === "The Crater")).toBe(true);
     expect(next.grid.some((t) => t.fire > 0)).toBe(true);
     expect(next.log).toHaveLength(1);
     expect(next.ongoing).toHaveLength(1);
@@ -89,49 +92,77 @@ describe("city simulation", () => {
     expect(s.bulletins).toHaveLength(0);
     s = tick(s);
     expect(s.bulletins).toHaveLength(1);
-    expect(s.bulletins[0].text).toContain("heritage");
+    expect(s.bulletins[0].text).toContain("historic");
     expect(s.scheduled).toHaveLength(0);
     expect(countKinds(s.grid).shop).toBeGreaterThanOrEqual(shops);
   });
 
   test("district targets land in that district", () => {
     const s = createCity(8);
-    const next = applyEvent(s, "fire on Jalan Alor", {
+    const next = applyEvent(s, "fire on Elm Street", {
       ...meteor,
-      tile_ops: [{ op: "burn", target: "jalan_alor", count: 4, build_kind: null, landmark: null }],
+      tile_ops: [{ op: "burn", target: "elm_street", count: 4, build_kind: null, landmark: null }],
       followups: [],
     });
     const burning = next.grid.map((t, i) => (t.fire > 0 ? i : -1)).filter((i) => i >= 0);
-    expect(burning.length).toBeGreaterThan(0);
-    for (const i of burning) {
-      const x = i % 32;
-      const y = Math.floor(i / 32);
-      expect(x >= 9 && x <= 13 && y >= 23 && y <= 27).toBe(true);
-    }
+    expect(burning.length).toBe(4);
+    for (const i of burning) expect(districtAt(i).id).toBe("elm_street");
+  });
+
+  test("the railroad target hits the tracks, and wrecked track is relaid", () => {
+    let s = createCity(4);
+    s = applyEvent(s, "the freight train derails", {
+      ...meteor,
+      tile_ops: [{ op: "destroy", target: "railroad", count: 5, build_kind: null, landmark: null }],
+      followups: [],
+      ongoing: null,
+    });
+    const onRow = (i: number) => Math.abs(Math.floor(i / 32) - RAILROAD.row) <= 1;
+    const wrecked = s.grid.map((t, i) => (t.kind === "rubble" ? i : -1)).filter((i) => i >= 0);
+    expect(wrecked.length).toBe(5);
+    for (const i of wrecked) expect(onRow(i)).toBe(true);
+    for (let d = 0; d < 60; d++) s = tick(s);
+    const row = s.grid.slice(RAILROAD.row * 32, RAILROAD.row * 32 + 32);
+    expect(row.every((t) => ["rail", "road", "rubble"].includes(t.kind))).toBe(true);
+  });
+
+  test("the rift closes slowly on its own", () => {
+    let s = applyEvent(createCity(6), "the gate opens", {
+      ...meteor,
+      stat_changes: { ...meteor.stat_changes, rift: 60 },
+      tile_ops: [],
+      followups: [],
+      ongoing: null,
+    });
+    const opened = s.stats.rift;
+    expect(opened).toBeGreaterThan(60);
+    for (let d = 0; d < 10; d++) s = tick(s);
+    expect(s.stats.rift).toBeLessThan(opened);
+    expect(s.stats.rift).toBeGreaterThan(opened * 0.6);
   });
 
   test("builds still land when the targeted district is full", () => {
     let s = createCity(12345);
     while (s.day < 300) s = tick(s);
-    const inKlcc = (i: number) => districtAt(i).id === "klcc";
-    const free = s.grid.filter((t, i) => inKlcc(i) && ["empty", "rubble"].includes(t.kind));
-    expect(free.length).toBe(0);
-    const parks = (st: typeof s) => st.grid.filter((t, i) => inKlcc(i) && t.kind === "park").length;
-    const next = applyEvent(s, "DBKL opens pocket parks in KLCC", {
+    const inElm = (i: number) => districtAt(i).id === "elm_street";
+    const parks = (st: typeof s) => st.grid.filter((t, i) => inElm(i) && t.kind === "park").length;
+    const next = applyEvent(s, "The council opens pocket parks on Elm Street", {
       ...meteor,
-      tile_ops: [{ op: "build", target: "klcc", count: 3, build_kind: "park", landmark: null }],
+      tile_ops: [
+        { op: "build", target: "elm_street", count: 3, build_kind: "park", landmark: null },
+      ],
       followups: [],
       ongoing: null,
     });
     expect(parks(next) - parks(s)).toBe(3);
     // Landmarks aimed at a full district replace ordinary buildings, never icons.
     const icons = s.grid.filter((t) => t.kind === "landmark").map((t) => t.landmark?.name);
-    const withWhale = applyEvent(s, "A whale lands in KLCC", {
+    const withWhale = applyEvent(s, "A whale lands on Elm Street", {
       ...meteor,
       tile_ops: [
         {
           op: "landmark",
-          target: "klcc",
+          target: "elm_street",
           count: 1,
           build_kind: null,
           landmark: { name: "Beached whale", shape: "blob", color: "#445566", height: 1 },
@@ -141,7 +172,7 @@ describe("city simulation", () => {
       ongoing: null,
     });
     const whale = withWhale.grid.findIndex((t) => t.landmark?.name === "Beached whale");
-    expect(inKlcc(whale)).toBe(true);
+    expect(inElm(whale)).toBe(true);
     for (const name of icons)
       expect(withWhale.grid.some((t) => t.landmark?.name === name)).toBe(true);
   });
@@ -211,11 +242,11 @@ describe("Claude output", () => {
       headline: "Whale lands",
       subhead: "Yes.",
       quotes: [{ name: "A", role: "B", text: "C" }],
-      stats: { population: -10, happiness: 5, money: 0, pollution: 1, chaos: 20 },
+      stats: { population: -10, happiness: 5, money: 0, pollution: 1, rift: 20 },
       tile_ops: [
         {
           op: "landmark",
-          target: "KLCC",
+          target: "Elm Street",
           count: 1,
           build: "",
           landmark_name: "Whale",
@@ -225,7 +256,7 @@ describe("Claude output", () => {
         },
         {
           op: "build",
-          target: "bukit bintang",
+          target: "high school",
           count: 2,
           build: "Shop",
           landmark_name: "",
@@ -246,22 +277,22 @@ describe("Claude output", () => {
       ],
       ongoing_label: "",
       ongoing_days: 0,
-      ongoing_per_day: { population: 0, happiness: 0, money: 0, pollution: 0, chaos: 0 },
+      ongoing_per_day: { population: 0, happiness: 0, money: 0, pollution: 0, rift: 0 },
       actors: [
         { kind: "Whale", label: "Blue whale", color: "#4f6f8f", size: 4, count: 1, shape: "blob" },
         { kind: "dragon", label: "?", color: "red", size: 3, count: 1, shape: "wing" },
       ],
       crowd: "Flee",
       responders: ["fire", "coastguard"],
-      followups: [{ delay_days: 2, note: "Satay stalls.", stats: {}, tile_ops: [] }],
+      followups: [{ delay_days: 2, note: "Hot dog stand.", stats: {}, tile_ops: [] }],
     });
     expect(r.success).toBe(true);
     if (!r.success) return;
     expect(r.data.tile_ops).toHaveLength(2);
-    expect(r.data.tile_ops[0].target).toBe("klcc");
+    expect(r.data.tile_ops[0].target).toBe("elm_street");
     expect(r.data.tile_ops[0].landmark?.name).toBe("Whale");
     expect(r.data.tile_ops[1]).toMatchObject({
-      target: "bukit_bintang",
+      target: "high_school",
       build_kind: "shop",
       landmark: null,
     });
@@ -276,7 +307,7 @@ describe("Claude output", () => {
     const { fromClaude } = await import("./schema");
     const r = fromClaude({
       scale: "minor",
-      headline: "Teh tarik",
+      headline: "Walkie-talkie",
       subhead: "",
       quotes: [],
       stats: {},
@@ -284,13 +315,13 @@ describe("Claude output", () => {
       actors: [
         {
           kind: "giant_object",
-          label: "Teh tarik",
+          label: "Walkie-talkie",
           color: "#c8894a",
           size: 4,
           count: 1,
           shape: "cone",
-          model_key: "Teh Tarik  Glass!!",
-          search_terms: "glass drink",
+          model_key: "Walkie Talkie  Radio!!",
+          search_terms: "walkie talkie",
           motion: "levitate",
           parts: [
             {
@@ -353,9 +384,9 @@ describe("Claude output", () => {
     });
     expect(r.success).toBe(true);
     if (!r.success) return;
-    expect(r.data.spectacle.actors[0].model_key).toBe("teh-tarik-glass");
+    expect(r.data.spectacle.actors[0].model_key).toBe("walkie-talkie-radio");
     const tea = r.data.spectacle.actors[0];
-    expect(tea.search_terms).toBe("glass drink");
+    expect(tea.search_terms).toBe("walkie talkie");
     expect(tea.recipe?.motion).toBe("fall");
     expect(tea.recipe?.parts).toHaveLength(3);
     expect(tea.recipe?.parts[2].shape).toBe("box");

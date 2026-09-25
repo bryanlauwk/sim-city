@@ -3,7 +3,7 @@ import { eventResultSchema } from "./schema";
 import { replay } from "./simulation";
 import type { CityState, EventRecord } from "./types";
 
-const CITY_KEY = "type-a-disaster:golden-triangle";
+const CITY_KEY = "type-a-disaster:maple-hollow";
 const CREDITS_KEY = "type-a-disaster:credits";
 
 export const MAX_CREDITS = 5;

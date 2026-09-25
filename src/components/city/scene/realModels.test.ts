@@ -18,15 +18,15 @@ describe("real models for built-in actors", () => {
 
   test("kinds without a real model, and custom actors, are left alone", () => {
     const storm = actor("storm");
-    const custom = actor("giant_object", { model_key: "teh-tarik" });
+    const custom = actor("giant_object", { model_key: "walkie-talkie" });
     expect(withRealModels([storm, custom], false)).toEqual([storm, custom]);
   });
 
   test("phones skip the heavy models but keep the light ones", () => {
-    const [kaiju, durian] = withRealModels([actor("kaiju"), actor("durian")], true);
+    const [kaiju, whale] = withRealModels([actor("kaiju"), actor("whale")], true);
     expect(REAL_MODELS.kaiju!.bytes).toBeGreaterThan(4e6);
     expect(kaiju.model_url).toBeUndefined();
-    expect(durian.model_url).toBeDefined();
+    expect(whale.model_url).toBeDefined();
   });
 
   test("every curated model is a real Objaverse id", () => {

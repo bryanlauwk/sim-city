@@ -1,8 +1,8 @@
 import { ClientOnly, createFileRoute } from "@tanstack/react-router";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import {
-  Camera,
   FastForward,
+  FlipVertical2,
   Loader2,
   Pause,
   Play,
@@ -47,11 +47,10 @@ import {
   natureScore,
   tick,
 } from "@/lib/city/simulation";
-import { districtAt, DISTRICTS } from "@/lib/city/kl";
+import { districtAt, DISTRICTS } from "@/lib/city/hollow";
 import type { SimClock, SpectacleRun } from "@/components/city/CityScene";
 import { hourOf } from "@/components/city/scene/common";
 import { withRealModels } from "@/components/city/scene/realModels";
-import { getMapsKey } from "@/lib/city/maps.functions";
 import { simulateEvent } from "@/lib/city/simulate.functions";
 import { applyModels, findModel, warmModelIndex, type FoundModel } from "@/lib/city/modelSearch";
 import {
@@ -69,11 +68,11 @@ export const Route = createFileRoute("/")({
   component: Index,
   head: () => ({
     meta: [
-      { title: "Type-a-Disaster: Kuala Lumpur" },
+      { title: "Type-a-Disaster: Maple Hollow" },
       {
         name: "description",
         content:
-          "A living low-poly Kuala Lumpur. Type what happens to it, watch it unfold, and read the paper's deadpan report.",
+          "Maple Hollow, 1985: a sleepy small town with something underneath. Type what happens to it, watch it unfold, flip to the Upside Down, and read the Courier's straight-faced report.",
       },
     ],
   }),
@@ -81,14 +80,14 @@ export const Route = createFileRoute("/")({
 
 const DAY_MS = 12000;
 const SUGGESTIONS = [
-  "A whale lands on Pavilion KL",
-  "Godzilla stomps down Jalan Bukit Bintang",
-  "A UFO hovers over the Petronas Towers",
-  "A thousand monkeys swing down from Bukit Nanas",
-  "It rains durians on Jalan Alor",
-  "A tapir wanders into Pavilion",
-  "Flash flood at the Bukit Bintang crossing",
-  "Merdeka Day fireworks over KLCC",
+  "A gate tears open under Hollow Point Lab",
+  "The Christmas lights on Elm Street start blinking",
+  "Kids on bikes chase something into Blackpine Woods",
+  "Something crawls out of the pool at Hawthorne House",
+  "Black vans roll down Main Street",
+  "Spores drift over the homecoming game",
+  "A giant waffle lands on Dot's Diner",
+  "The power station blows during the parade",
 ];
 const C = (GRID_SIZE - 1) / 2;
 
@@ -103,11 +102,20 @@ const compact = (n: number) => {
 function eventFocus(before: CityState, after: CityState, result: EventResult) {
   const tiles = changedTiles(before, after);
   if (!tiles.length) {
+    // Nothing on the map changed: play it out on the street nearest the
+    // targeted district (or the middle of town), where it can be seen.
     const target = result.tile_ops[0]?.target;
     const d = DISTRICTS.find((dd) => dd.id === target);
-    if (!d) return { x: 0, z: 0, radius: 2 };
-    const [x0, y0, x1, y1] = d.rect;
-    return { x: (x0 + x1) / 2 - C, z: (y0 + y1) / 2 - C, radius: 2.5 };
+    const [cx, cy] = d ? [(d.rect[0] + d.rect[2]) / 2, (d.rect[1] + d.rect[3]) / 2] : [C, C];
+    let best = -1;
+    after.grid.forEach((t, i) => {
+      if (t.kind !== "road") return;
+      const dist = Math.hypot((i % GRID_SIZE) - cx, Math.floor(i / GRID_SIZE) - cy);
+      if (best < 0 || dist < Math.hypot((best % GRID_SIZE) - cx, Math.floor(best / GRID_SIZE) - cy))
+        best = i;
+    });
+    if (best < 0) return { x: cx - C, z: cy - C, radius: 2.5 };
+    return { x: (best % GRID_SIZE) - C, z: Math.floor(best / GRID_SIZE) - C, radius: 2.5 };
   }
   // Centre on the biggest cluster: the mean, then the changed tile nearest it.
   let mx = 0;
@@ -175,21 +183,8 @@ function Index() {
   const [paused, setPaused] = useState(false);
   const [fast, setFast] = useState(false);
   const [labels, setLabels] = useState(true);
-  // Google's real Kuala Lumpur in 3D, when the site has a Maps key.
-  const [mapsKey, setMapsKey] = useState<string | null>(null);
-  const [photo, setPhoto] = useState(false);
-  useEffect(() => {
-    getMapsKey()
-      .then((r) => setMapsKey(r.key))
-      .catch(() => undefined);
-  }, []);
-  const mapsFailed = useCallback(() => {
-    setMapsKey(null);
-    setPhoto(false);
-    toast("Google 3D tiles unavailable", {
-      description: "Check the Maps key's API and referrer restrictions, and billing.",
-    });
-  }, []);
+  // Looking at the Upside Down instead of the town.
+  const [upsideDown, setUpsideDown] = useState(false);
   const [credits, setCredits] = useState<Credits>({ credits: MAX_CREDITS, since: 0 });
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -220,7 +215,7 @@ function Index() {
           setShared(true);
         })
         .catch(() => {
-          toast.error("That share link is smudged beyond reading. Here's your own city instead.");
+          toast.error("That share link is smudged beyond reading. Here's your own town instead.");
           setCity(loadCity() ?? createCity(newSeed()));
         });
     } else {
@@ -413,7 +408,7 @@ function Index() {
       if (!early) void lookups.then((models) => lateModels(id, event, models));
       for (const a of result.spectacle.actors)
         if (a.fresh)
-          toast.success(`New in the KL library: ${a.label || a.model_key}`, {
+          toast.success(`New in the Maple Hollow library: ${a.label || a.model_key}`, {
             description: "Designed on the spot by the newsroom, saved for everyone.",
             duration: 8000,
           });
@@ -430,11 +425,11 @@ function Index() {
     const url = `${window.location.origin}/#c=${await encodeShare(city)}`;
     try {
       if (navigator.share) {
-        await navigator.share({ title: `The ${city.name} Gazette`, url });
+        await navigator.share({ title: `The ${city.name} Courier`, url });
       } else {
         await navigator.clipboard.writeText(url);
         toast.success("Link copied", {
-          description: "Anyone with it can replay your city's history.",
+          description: "Anyone with it can replay your town's history.",
         });
       }
     } catch {
@@ -470,9 +465,7 @@ function Index() {
                   onSpectacleDone={endSpectacle}
                   tremor={tremor}
                   showLabels={labels}
-                  mapsKey={mapsKey}
-                  photo={photo}
-                  onMapsFail={mapsFailed}
+                  upsideDown={upsideDown}
                 />
               ) : (
                 <SceneFallback />
@@ -493,6 +486,11 @@ function Index() {
             <p className="font-mono text-[10px] text-muted-foreground">
               Day {city?.day ?? 0} · <GameClock clock={clock} />
             </p>
+            {upsideDown && (
+              <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.25em] text-stamp">
+                The Upside Down
+              </p>
+            )}
           </div>
           {st && (
             <div className="pointer-events-auto grid grid-cols-3 gap-1 sm:grid-cols-6">
@@ -504,7 +502,7 @@ function Index() {
               />
               <Stat
                 label="Budget"
-                value={`RM${compact(st.money)}`}
+                value={`$${compact(st.money)}`}
                 tone={st.money < 0 ? "bad" : undefined}
               />
               <Stat
@@ -518,9 +516,9 @@ function Index() {
                 tone={natureScore(city!.grid, st.pollution) < 25 ? "bad" : undefined}
               />
               <Stat
-                label="Chaos"
-                value={`${Math.round(st.chaos)}`}
-                tone={st.chaos > 50 ? "bad" : undefined}
+                label="Rift"
+                value={`${Math.round(st.rift)}`}
+                tone={st.rift > 40 ? "bad" : undefined}
               />
             </div>
           )}
@@ -566,29 +564,27 @@ function Index() {
           >
             <Tag />
           </Button>
-          {mapsKey && (
-            <Button
-              size="icon"
-              variant="outline"
-              className={cn(
-                "rounded-none border-ink bg-paper/90",
-                photo && "bg-ink text-paper hover:bg-ink/90 hover:text-paper",
-              )}
-              onClick={() => setPhoto((p) => !p)}
-              aria-label="Photo mode: the real Kuala Lumpur"
-              aria-pressed={photo}
-              title="Photo mode: the real Kuala Lumpur (Google 3D)"
-            >
-              <Camera />
-            </Button>
-          )}
+          <Button
+            size="icon"
+            variant="outline"
+            className={cn(
+              "rounded-none border-ink bg-paper/90",
+              upsideDown && "bg-stamp text-paper hover:bg-stamp/90 hover:text-paper",
+            )}
+            onClick={() => setUpsideDown((u) => !u)}
+            aria-label="Flip to the Upside Down"
+            aria-pressed={upsideDown}
+            title={upsideDown ? "Back to Maple Hollow" : "Flip to the Upside Down"}
+          >
+            <FlipVertical2 />
+          </Button>
           <Button
             size="icon"
             variant="outline"
             className="rounded-none border-ink bg-paper/90"
             onClick={share}
-            aria-label="Share city"
-            title="Share city"
+            aria-label="Share town"
+            title="Share town"
           >
             <Share2 />
           </Button>
@@ -597,8 +593,8 @@ function Index() {
             variant="outline"
             className="rounded-none border-ink bg-paper/90"
             onClick={() => setConfirmReset(true)}
-            aria-label="New city"
-            title="New city"
+            aria-label="New town"
+            title="New town"
           >
             <RotateCcw />
           </Button>
@@ -606,7 +602,7 @@ function Index() {
 
         {shared && (
           <div className="absolute left-3 right-16 top-44 border-2 border-ink bg-paper/95 p-2 text-sm sm:top-20 sm:max-w-sm">
-            You're reading someone else's city. Type an event to take it over, or{" "}
+            You're reading someone else's town. Type an event to take it over, or{" "}
             <button className="underline" onClick={newCity}>
               start your own
             </button>
@@ -631,7 +627,7 @@ function Index() {
                 maxLength={200}
                 disabled={busy || holding}
                 aria-label="Event"
-                placeholder="Type something that happens to the city…"
+                placeholder="Type something that happens to the town…"
                 className="min-w-0 flex-1 bg-transparent px-2 py-2 font-serif-d text-base outline-none placeholder:text-ink/40"
               />
               <Button
@@ -701,7 +697,7 @@ function Index() {
               className="rounded-none bg-stamp text-paper hover:bg-stamp/90"
               onClick={newCity}
             >
-              New city
+              New town
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -717,9 +713,9 @@ function Index() {
               {city?.name}, day 0 – {city?.day}
             </AlertDialogTitle>
             <AlertDialogDescription className="text-ink/80">
-              The city is survived by {city ? countKinds(city.grid).rubble : 0} piles of rubble and{" "}
+              The town is survived by {city ? countKinds(city.grid).rubble : 0} piles of rubble and{" "}
               {city?.log.length ?? 0} front pages. In lieu of flowers, the family asks that you
-              found another city, or type something that brings this one back.
+              found another town, or type something that brings this one back.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -727,7 +723,7 @@ function Index() {
               Try to revive it
             </AlertDialogCancel>
             <AlertDialogAction className="rounded-none bg-ink text-paper" onClick={newCity}>
-              Found a new city
+              Found a new town
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

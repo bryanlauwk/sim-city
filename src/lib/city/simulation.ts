@@ -1,4 +1,4 @@
-import { districtAt, klTerrain } from "./kl";
+import { districtAt, hollowTerrain, RAILROAD } from "./hollow";
 import {
   GRID_SIZE,
   SCALE_COST,
@@ -103,6 +103,7 @@ export function countKinds(grid: Tile[]): Record<TileKind, number> {
     forest: 0,
     rubble: 0,
     water: 0,
+    rail: 0,
     landmark: 0,
   };
   for (const t of grid) c[t.kind]++;
@@ -120,8 +121,14 @@ export function natureScore(grid: Tile[], pollution: number): number {
 const nearRoad = (s: CityState, i: number) => NEIGHBORS[i].some((n) => s.grid[n].kind === "road");
 const nearBuilt = (s: CityState, i: number) => NEIGHBORS[i].some((n) => isOccupied(s.grid[n]));
 
+/** Residents per tile: a family house, flats over a shop, a brick apartment block. */
 function capacity(c: Record<TileKind, number>): number {
-  return c.house * 1500 + c.shop * 400 + c.tower * 9000;
+  return c.house * 14 + c.shop * 3 + c.tower * 60;
+}
+
+/** Cleared ground on the railroad's row goes back to track (bar the crossings). */
+function clearedKind(i: number): TileKind {
+  return Math.floor(i / N) === RAILROAD.row ? "rail" : "empty";
 }
 
 function pickKind(s: CityState, i: number): TileKind {
@@ -138,10 +145,10 @@ function pickKind(s: CityState, i: number): TileKind {
 // ---------------------------------------------------------------------------
 
 export function createCity(seed: number): CityState {
-  const { kinds, landmarks } = klTerrain();
+  const { kinds, landmarks } = hollowTerrain();
   const s: CityState = {
     version: 2,
-    name: "Kuala Lumpur",
+    name: "Maple Hollow",
     seed,
     rng: seed | 0,
     day: 0,
@@ -153,7 +160,7 @@ export function createCity(seed: number): CityState {
       builtDay: 0,
       ...(landmarks.has(i) ? { landmark: landmarks.get(i) } : {}),
     })),
-    stats: { population: 0, happiness: 60, money: 5_000_000, pollution: 20, chaos: 0 },
+    stats: { population: 0, happiness: 65, money: 2_000_000, pollution: 10, rift: 0 },
     ongoing: [],
     scheduled: [],
     bulletins: [],
@@ -191,7 +198,7 @@ function clampStats(st: Stats) {
   st.money = Math.round(st.money);
   st.happiness = clamp(st.happiness, 0, 100);
   st.pollution = clamp(st.pollution, 0, 100);
-  st.chaos = clamp(st.chaos, 0, 100);
+  st.rift = clamp(st.rift, 0, 100);
 }
 
 function addStats(st: Stats, d: Stats) {
@@ -238,7 +245,7 @@ export function tick(prev: CityState): CityState {
   const burning = s.grid.map((t, i) => (t.fire > 0 ? i : -1)).filter((i) => i >= 0);
   for (const i of burning) {
     const t = s.grid[i];
-    if (rand(s) < 0.12 + st.chaos / 400) {
+    if (rand(s) < 0.12 + st.rift / 400) {
       const n = pick(s, NEIGHBORS[i]);
       const nt = s.grid[n];
       if ((isBuilding(nt) || nt.kind === "forest") && nt.fire === 0) nt.fire = 3;
@@ -258,7 +265,8 @@ export function tick(prev: CityState): CityState {
   // Rubble gets cleared; abandoned land slowly turns back into forest.
   for (let i = 0; i < s.grid.length; i++) {
     const t = s.grid[i];
-    if (t.kind === "rubble" && s.day - t.builtDay >= 5 && rand(s) < 0.3) setKind(s, i, "empty");
+    if (t.kind === "rubble" && s.day - t.builtDay >= 5 && rand(s) < 0.3)
+      setKind(s, i, clearedKind(i));
     else if (t.kind === "empty" && s.day - t.builtDay > 30 && rand(s) < 0.004 && !nearRoad(s, i))
       setKind(s, i, "forest");
   }
@@ -328,8 +336,8 @@ export function tick(prev: CityState): CityState {
   const targetPop = capacity(c) * (0.5 + st.happiness / 200);
   st.population += (targetPop - st.population) * 0.12;
 
-  const taxes = st.population * 0.1 + c.shop * 600 + c.tower * 2000;
-  const upkeep = c.road * 200 + c.park * 400 + c.landmark * 1000;
+  const taxes = st.population * 2 + c.shop * 150 + c.tower * 300;
+  const upkeep = c.road * 40 + c.park * 60 + c.landmark * 250;
   st.money += taxes - upkeep;
 
   const targetPollution =
@@ -342,15 +350,16 @@ export function tick(prev: CityState): CityState {
     nature * 0.2 +
     Math.min(c.landmark, 10) * 0.6 -
     st.pollution * 0.35 -
-    st.chaos * 0.3 -
+    st.rift * 0.3 -
     fires * 2 -
     floods * 0.5 -
     (st.money < 0 ? 12 : 0);
   st.happiness += (targetHappiness - st.happiness) * 0.08;
-  st.chaos *= 0.93;
+  // The gate closes slowly on its own.
+  st.rift *= 0.97;
   clampStats(st);
 
-  if (s.day > 5 && (c.house + c.shop + c.tower === 0 || st.population < 5)) s.collapsed = true;
+  if (s.day > 5 && (c.house + c.shop + c.tower === 0 || st.population < 1)) s.collapsed = true;
   return s;
 }
 
@@ -396,6 +405,11 @@ function targetTiles(s: CityState, target: TileTarget): number[] {
     return shuffle(
       s,
       all.filter((i) => NEIGHBORS[i].some((n) => s.grid[n].kind === "water")),
+    );
+  if (target === "railroad")
+    return shuffle(
+      s,
+      all.filter((i) => Math.abs(xy(i).y - RAILROAD.row) <= 1),
     );
   if (target === "random") return shuffle(s, all);
   // A district name.
@@ -506,7 +520,7 @@ function applyOp(s: CityState, op: TileOp) {
         return t.kind === "rubble" || t.fire > 0 || t.flood > 0;
       });
       tiles.slice(0, count).forEach((i) => {
-        if (s.grid[i].kind === "rubble") setKind(s, i, "empty");
+        if (s.grid[i].kind === "rubble") setKind(s, i, clearedKind(i));
         s.grid[i].fire = 0;
         s.grid[i].flood = 0;
       });
@@ -528,13 +542,13 @@ function applyOp(s: CityState, op: TileOp) {
   }
 }
 
-const SCALE_CHAOS = { minor: 2, citywide: 6, apocalyptic: 15 };
+const SCALE_RIFT = { minor: 1, citywide: 3, apocalyptic: 8 };
 
 export function applyEvent(prev: CityState, input: string, result: EventResult): CityState {
   const s = cloneState(prev);
   const st = s.stats;
   addStats(st, result.stat_changes);
-  st.chaos += SCALE_CHAOS[result.scale];
+  st.rift += SCALE_RIFT[result.scale];
   for (const op of result.tile_ops.slice(0, 6)) applyOp(s, op);
   if (result.ongoing) {
     s.ongoing.push({
@@ -554,7 +568,7 @@ export function applyEvent(prev: CityState, input: string, result: EventResult):
   s.log.push({ day: s.day, input, result });
   // An event can revive a collapsed city (e.g. "a thousand settlers arrive").
   const c = countKinds(s.grid);
-  if (c.house + c.shop + c.tower > 0 && st.population >= 5) s.collapsed = false;
+  if (c.house + c.shop + c.tower > 0 && st.population >= 1) s.collapsed = false;
   return s;
 }
 

@@ -76,14 +76,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         name: "description",
         content:
-          "A tiny 3D city that happens to you. Type an event; the local paper reports the fallout.",
+          "A sleepy 1985 small town with something underneath. Type an event; the local paper reports the fallout.",
       },
       { name: "author", content: "Lovable" },
       { property: "og:title", content: "Type-a-Disaster" },
       {
         property: "og:description",
         content:
-          "A tiny 3D city that happens to you. Type an event; the local paper reports the fallout.",
+          "A sleepy 1985 small town with something underneath. Type an event; the local paper reports the fallout.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
