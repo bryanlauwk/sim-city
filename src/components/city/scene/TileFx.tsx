@@ -686,7 +686,7 @@ export function landmarkLabelSpecs(grid: Tile[]): LabelSpec[] {
   return out;
 }
 
-export function TileFx({ grid }: { grid: Tile[] }) {
+export function TileFx({ grid, roofs }: { grid: Tile[]; roofs?: Map<number, number> }) {
   return (
     <group>
       {grid.map((t, i) => {
@@ -702,7 +702,7 @@ export function TileFx({ grid }: { grid: Tile[] }) {
               </PopIn>
             )}
             {t.kind === "rubble" && <Rubble seed={i + t.builtDay} />}
-            {t.fire > 0 && <Fire seed={i} y={roofHeight(t)} />}
+            {t.fire > 0 && <Fire seed={i} y={roofs?.get(i) ?? roofHeight(t)} />}
             {t.flood > 0 && (
               <mesh position={[0, 0.1, 0]}>
                 <boxGeometry args={[1, 0.14, 1]} />

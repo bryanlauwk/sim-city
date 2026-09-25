@@ -1,7 +1,7 @@
 import { useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
-import { buildingGlow } from "./Buildings";
+import { buildingGlow } from "./facade";
 import { lampGlow, treeWind } from "./Ground";
 import { hash, hourOf, isNight, type WorldBus } from "./common";
 import { env } from "./env";

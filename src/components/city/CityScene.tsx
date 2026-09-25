@@ -8,6 +8,8 @@ import { createBus, hash, type WorldBus } from "./scene/common";
 import { env } from "./scene/env";
 import { Crossings, Ground, StreetLamps, Trees } from "./scene/Ground";
 import { KLStreetProps } from "./scene/KLStreetProps";
+import { pieceHeight, realTiles, useOsmBuildings } from "./scene/osmBuildings";
+import { RealBuildings } from "./scene/RealBuildings";
 import { preloadActorTextures } from "./scene/textures";
 import { Life } from "./scene/Life";
 import { PhotoSky } from "./scene/PhotoSky";
@@ -229,6 +231,16 @@ function CityScene({
     return () => clearTimeout(id);
   }, []);
   const bus = useMemo(createBus, []);
+  // Real OpenStreetMap buildings on the tiles that still have them.
+  const osm = useOsmBuildings();
+  const real = useMemo(() => realTiles(city.grid, osm), [city.grid, osm]);
+  const realRoofs = useMemo(() => {
+    const out = new Map<number, number>();
+    for (const p of osm ?? [])
+      if (real.has(p.tile))
+        out.set(p.tile, Math.max(out.get(p.tile) ?? 0, pieceHeight(p, city.grid[p.tile].kind)));
+    return out;
+  }, [osm, real, city.grid]);
   // Fetch actor textures in the background once the city is up, so the
   // first whale or kaiju of the session doesn't wait on a download.
   useEffect(() => {
@@ -307,9 +319,10 @@ function CityScene({
           <Crossings grid={city.grid} />
           <StreetLamps grid={city.grid} />
           <KLStreetProps grid={city.grid} />
-          <KitBuildings grid={city.grid} />
-          <LocalHouses grid={city.grid} />
-          <TileFx grid={city.grid} />
+          {osm && <RealBuildings grid={city.grid} pieces={osm} tiles={real} />}
+          <KitBuildings grid={city.grid} skip={real} />
+          <LocalHouses grid={city.grid} skip={real} />
+          <TileFx grid={city.grid} roofs={realRoofs} />
           <Rail bus={bus} />
           <Life city={city} bus={bus} />
           {spectacle && (
@@ -342,6 +355,16 @@ function CityScene({
           />
         )}
       </Canvas>
+      {osm && (
+        <a
+          href="https://www.openstreetmap.org/copyright"
+          target="_blank"
+          rel="noreferrer"
+          className="absolute bottom-1 right-2 z-10 text-[9px] text-white/80 [text-shadow:0_1px_2px_rgba(0,0,0,0.6)] hover:underline"
+        >
+          Buildings © OpenStreetMap contributors
+        </a>
+      )}
       <LabelOverlay specs={labels} registry={registry} showLandmarks={showLabels && !spectacle} />
     </div>
   );
