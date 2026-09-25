@@ -23,7 +23,7 @@ const statDeltas = z.object({
   happiness: clampNum(-60, 60),
   money: clampNum(-50_000_000, 50_000_000),
   pollution: clampNum(-60, 60),
-  chaos: clampNum(-60, 60),
+  rift: clampNum(-60, 60),
 });
 
 const landmark = z.object({
@@ -172,9 +172,9 @@ const statsJson = {
     happiness: { type: "integer" },
     money: { type: "integer" },
     pollution: { type: "integer" },
-    chaos: { type: "integer" },
+    rift: { type: "integer" },
   },
-  required: ["population", "happiness", "money", "pollution", "chaos"],
+  required: ["population", "happiness", "money", "pollution", "rift"],
   additionalProperties: false,
 } as const;
 
@@ -327,7 +327,7 @@ export const claudeOutputJsonSchema = {
 } as const;
 
 /** A plain-text description of the same shape, for requests without structured outputs. */
-export const CLAUDE_OUTPUT_EXAMPLE = `{"scale":"minor|citywide|apocalyptic","headline":"","subhead":"","quotes":[{"name":"","role":"","text":""}],"stats":{"population":0,"happiness":0,"money":0,"pollution":0,"chaos":0},"tile_ops":[{"op":"destroy|burn|flood|build|landmark|clear","target":"","count":1,"build":"","landmark_name":"","landmark_shape":"","landmark_color":"#rrggbb","landmark_height":1}],"ongoing_label":"","ongoing_days":0,"ongoing_per_day":{"population":0,"happiness":0,"money":0,"pollution":0,"chaos":0},"actors":[{"kind":"","label":"","color":"#rrggbb","size":1,"count":1,"shape":"","model_key":"","search_terms":"","motion":"fall|walk|hover|spin","parts":[{"shape":"box|sphere|cylinder|cone|torus|capsule","x":0,"y":0.5,"z":0,"sx":1,"sy":1,"sz":1,"rx":0,"ry":0,"rz":0,"color":"#rrggbb"}]}],"crowd":"flee|gather|celebrate|ignore","responders":[""],"followups":[{"delay_days":1,"note":"","stats":{"population":0,"happiness":0,"money":0,"pollution":0,"chaos":0},"tile_ops":[{"op":"build","target":"","count":1,"build":""}]}]}`;
+export const CLAUDE_OUTPUT_EXAMPLE = `{"scale":"minor|citywide|apocalyptic","headline":"","subhead":"","quotes":[{"name":"","role":"","text":""}],"stats":{"population":0,"happiness":0,"money":0,"pollution":0,"rift":0},"tile_ops":[{"op":"destroy|burn|flood|build|landmark|clear","target":"","count":1,"build":"","landmark_name":"","landmark_shape":"","landmark_color":"#rrggbb","landmark_height":1}],"ongoing_label":"","ongoing_days":0,"ongoing_per_day":{"population":0,"happiness":0,"money":0,"pollution":0,"rift":0},"actors":[{"kind":"","label":"","color":"#rrggbb","size":1,"count":1,"shape":"","model_key":"","search_terms":"","motion":"fall|walk|hover|spin","parts":[{"shape":"box|sphere|cylinder|cone|torus|capsule","x":0,"y":0.5,"z":0,"sx":1,"sy":1,"sz":1,"rx":0,"ry":0,"rz":0,"color":"#rrggbb"}]}],"crowd":"flee|gather|celebrate|ignore","responders":[""],"followups":[{"delay_days":1,"note":"","stats":{"population":0,"happiness":0,"money":0,"pollution":0,"rift":0},"tile_ops":[{"op":"build","target":"","count":1,"build":""}]}]}`;
 
 const norm = (v: unknown) =>
   String(v ?? "")
@@ -349,7 +349,7 @@ const statsFrom = (v: unknown) => {
     happiness: n("happiness"),
     money: n("money"),
     pollution: n("pollution"),
-    chaos: n("chaos"),
+    rift: n("rift"),
   };
 };
 
@@ -453,7 +453,7 @@ export const citySummarySchema = z.object({
     happiness: z.number(),
     money: z.number(),
     pollution: z.number(),
-    chaos: z.number(),
+    rift: z.number(),
   }),
   tiles: z.record(z.string(), z.number()),
   nature: z.number().min(0).max(100),

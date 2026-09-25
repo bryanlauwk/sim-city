@@ -4,7 +4,7 @@
  * When Claude casts something the built-in library can't show, it names a
  * model_key, gives search_terms for a ready-made model, and designs a recipe
  * of primitives as a stand-in. With Supabase configured, the first recipe for
- * each key is kept, so every visitor sees the same teh tarik, and Claude is
+ * each key is kept, so every visitor sees the same giant walkie-talkie, and Claude is
  * shown the saved keys so it reuses them.
  *
  * Ready-made models are found separately, in the browser, from the static

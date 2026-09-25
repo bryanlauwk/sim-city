@@ -2,28 +2,46 @@ import { useLayoutEffect, useMemo, useRef } from "react";
 import { useFrame, useLoader } from "@react-three/fiber";
 import * as THREE from "three";
 import type { Tile } from "@/lib/city/types";
-import { CROSSINGS } from "@/lib/city/kl";
+import { CROSSINGS } from "@/lib/city/hollow";
 import { CENTER, hash, tileX, tileZ } from "./common";
 import { env } from "./env";
 
+// October in Maple Hollow: lawns, a little yellowed.
 const BASE: Record<string, string> = {
-  empty: "#a3c78a",
+  empty: "#9cae6c",
   road: "#4e5058",
-  house: "#c9cfb8",
-  shop: "#cfcac0",
-  tower: "#c2bfb8",
-  park: "#7fc46a",
-  forest: "#4f8f45",
+  house: "#8bab62",
+  shop: "#bdb7aa",
+  tower: "#b3ada2",
+  park: "#86a85c",
+  forest: "#4d6a3c",
   rubble: "#8a7f72",
-  water: "#3f8fc9",
-  landmark: "#d9d2c0",
+  water: "#3f6f8c",
+  rail: "#6f655a",
+  landmark: "#c9c2b0",
+};
+
+// The same ground in the Upside Down: ash and dead grass.
+const UPSIDE: Record<string, string> = {
+  empty: "#3b3f47",
+  road: "#24262c",
+  house: "#393d44",
+  shop: "#34373d",
+  tower: "#33363c",
+  park: "#383c42",
+  forest: "#2e3238",
+  rubble: "#2c2d30",
+  water: "#141a22",
+  rail: "#2a2a2c",
+  landmark: "#35383e",
 };
 
 const tmpM = new THREE.Matrix4();
 const tmpC = new THREE.Color();
 
 /** Every tile's base slab in one draw call. */
-export function Ground({ grid, backdrop = false }: { grid: Tile[]; backdrop?: boolean }) {
+export function Ground({ grid, upside = false }: { grid: Tile[]; upside?: boolean }) {
+  const palette = upside ? UPSIDE : BASE;
   const land = useRef<THREE.InstancedMesh>(null);
   const roads = useRef<THREE.InstancedMesh>(null);
   const puddles = useRef<THREE.InstancedMesh>(null);
@@ -69,7 +87,7 @@ export function Ground({ grid, backdrop = false }: { grid: Tile[]; backdrop?: bo
       tmpM.makeTranslation(x, -0.05, z);
       land.current?.setMatrixAt(l, tmpM);
       // A little per-tile variation keeps grass and forest from looking flat.
-      tmpC.set(BASE[t.kind]).offsetHSL(0, 0, (hash(i, 3) - 0.5) * 0.05);
+      tmpC.set(palette[t.kind]).offsetHSL(0, 0, (hash(i, 3) - 0.5) * 0.05);
       land.current?.setColorAt(l++, tmpC);
       if (t.kind === "road") {
         const q = new THREE.Quaternion().setFromAxisAngle(
@@ -106,7 +124,7 @@ export function Ground({ grid, backdrop = false }: { grid: Tile[]; backdrop?: bo
       puddles.current.count = puddleSpots.length;
       puddles.current.instanceMatrix.needsUpdate = true;
     }
-  }, [grid, puddleSpots]);
+  }, [grid, puddleSpots, palette]);
 
   const [roadMap, roadNormal] = useLoader(THREE.TextureLoader, [
     "/textures/wet-asphalt.webp",
@@ -123,13 +141,14 @@ export function Ground({ grid, backdrop = false }: { grid: Tile[]; backdrop?: bo
     }
     return new THREE.MeshPhysicalMaterial({
       map: roadMap,
+      ...(upside ? { color: "#3a3d44" } : {}),
       normalMap: roadNormal,
       normalScale: new THREE.Vector2(0.28, 0.28),
       roughness: 0.88,
       metalness: 0.04,
       clearcoat: 0.001,
     });
-  }, [roadMap, roadNormal]);
+  }, [roadMap, roadNormal, upside]);
 
   const puddleMat = useMemo(
     () =>
@@ -147,7 +166,7 @@ export function Ground({ grid, backdrop = false }: { grid: Tile[]; backdrop?: bo
 
   const waterMat = useMemo(() => {
     const m = new THREE.MeshPhysicalMaterial({
-      color: BASE.water,
+      color: palette.water,
       roughness: 0.15,
       metalness: 0.1,
       clearcoat: 0.8,
@@ -155,9 +174,10 @@ export function Ground({ grid, backdrop = false }: { grid: Tile[]; backdrop?: bo
       opacity: 0.92,
     });
     return m;
-  }, []);
+  }, [palette]);
   useFrame(({ clock }, dt) => {
-    waterMat.color.setHSL(0.57, 0.52, 0.47 + Math.sin(clock.elapsedTime * 1.3) * 0.02);
+    if (upside) waterMat.color.setHSL(0.6, 0.3, 0.07);
+    else waterMat.color.setHSL(0.55, 0.38, 0.36 + Math.sin(clock.elapsedTime * 1.3) * 0.02);
     const blend = Math.min(1, dt * 1.3);
     roadMat.roughness += ((env.raining ? 0.3 : 0.88) - roadMat.roughness) * blend;
     roadMat.clearcoat += ((env.raining ? 0.75 : 0.001) - roadMat.clearcoat) * blend;
@@ -200,9 +220,8 @@ export function Ground({ grid, backdrop = false }: { grid: Tile[]; backdrop?: bo
         <boxGeometry args={[1, 0.08, 1]} />
       </instancedMesh>
       <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.11, 0]}>
-        {/* Just the map when the real city surrounds it. */}
-        <planeGeometry args={backdrop ? [32, 32] : [160, 160]} />
-        <meshStandardMaterial color="#7fa872" />
+        <planeGeometry args={[160, 160]} />
+        <meshStandardMaterial color={upside ? "#2e3238" : "#6f8a4f"} />
       </mesh>
     </group>
   );
@@ -266,7 +285,7 @@ export function StreetLamps({ grid }: { grid: Tile[] }) {
   );
 }
 
-/** Tropical trees for forest and park tiles; canopies sway in the wind. */
+/** Canopies sway in the wind. */
 export const treeWind = { value: 1 };
 const treeTime = { value: 0 };
 
@@ -300,11 +319,23 @@ interface TreeSpot {
   x: number;
   z: number;
   s: number;
-  palm: boolean;
+  pine: boolean;
   shade: number;
 }
 
-export function Trees({ grid }: { grid: Tile[] }) {
+/** Autumn leaves: mostly reds, oranges and golds, with some green holding on. */
+function autumn(shade: number, k: number, out: THREE.Color) {
+  const r = hash(Math.floor(shade * 997), k);
+  if (r < 0.2) return out.setHSL(0.24 + shade * 0.06, 0.34, 0.26);
+  return out.setHSL(0.005 + shade * 0.1, 0.72 + r * 0.2, 0.28 + r * 0.08);
+}
+
+/**
+ * Trees for the woods, parks, lawns and streets: October maples and oaks,
+ * and dark pines. In the Upside Down (`upside`) they are dead: bare trunks
+ * and grey, needle-less pines.
+ */
+export function Trees({ grid, upside = false }: { grid: Tile[]; upside?: boolean }) {
   const spots = useMemo(() => {
     const out: TreeSpot[] = [];
     grid.forEach((t, i) => {
@@ -314,19 +345,29 @@ export function Trees({ grid }: { grid: Tile[] }) {
           x: tileX(i) + (hash(i, k * 2) - 0.5) * 0.7,
           z: tileZ(i) + (hash(i, k * 2 + 1) - 0.5) * 0.7,
           s: 0.8 + hash(i, k + 20) * 0.6 * (t.kind === "forest" ? 1.3 : 1),
-          palm: t.kind === "park" ? hash(i, k + 40) < 0.5 : hash(i, k + 40) < 0.15,
+          pine: t.kind === "forest" ? hash(i, k + 40) < 0.55 : hash(i, k + 40) < 0.15,
           shade: hash(i, k + 60),
         });
       }
-      // Rain trees shade a third of the streets from the kerb.
-      if (t.kind === "road" && hash(i, 77) < 0.33) {
+      // A backyard tree behind many houses.
+      if (t.kind === "house" && hash(i, 70) < 0.55) {
+        out.push({
+          x: tileX(i) + (hash(i, 71) - 0.5) * 0.6,
+          z: tileZ(i) + (hash(i, 72) - 0.5) * 0.6,
+          s: 0.6 + hash(i, 73) * 0.35,
+          pine: hash(i, 74) < 0.2,
+          shade: hash(i, 75),
+        });
+      }
+      // Street trees along a quarter of the streets.
+      if (t.kind === "road" && hash(i, 77) < 0.25) {
         const cx = hash(i, 78) < 0.5 ? -0.42 : 0.42;
         const cz = hash(i, 79) < 0.5 ? -0.42 : 0.42;
         out.push({
           x: tileX(i) + cx,
           z: tileZ(i) + cz,
-          s: 0.7 + hash(i, 80) * 0.4,
-          palm: hash(i, 81) < 0.2,
+          s: 0.65 + hash(i, 80) * 0.35,
+          pine: false,
           shade: hash(i, 82),
         });
       }
@@ -336,68 +377,54 @@ export function Trees({ grid }: { grid: Tile[] }) {
 
   const trunks = useRef<THREE.InstancedMesh>(null);
   const crowns = useRef<THREE.InstancedMesh>(null);
-  const fronds = useRef<THREE.InstancedMesh>(null);
-  const leafMap = useLoader(THREE.TextureLoader, "/textures/rain-tree-leaves.webp");
-  useMemo(() => {
-    leafMap.colorSpace = THREE.SRGBColorSpace;
-    leafMap.wrapS = THREE.RepeatWrapping;
-    leafMap.wrapT = THREE.RepeatWrapping;
-    leafMap.anisotropy = 8;
-    leafMap.needsUpdate = true;
-  }, [leafMap]);
-  const crownMat = useMemo(() => swayMaterial("#ffffff", leafMap), [leafMap]);
-  const frondMat = useMemo(() => swayMaterial("#ffffff", leafMap), [leafMap]);
+  const tiers = useRef<THREE.InstancedMesh>(null);
+  const crownMat = useMemo(() => swayMaterial("#ffffff"), []);
+  const tierMat = useMemo(() => swayMaterial(upside ? "#3a3d42" : "#2f4a34"), [upside]);
 
   useLayoutEffect(() => {
     let c = 0;
     let f = 0;
     const q = new THREE.Quaternion();
     spots.forEach((sp, k) => {
-      const h = sp.palm ? 0.78 * sp.s : 0.34 * sp.s;
+      const h = sp.pine ? 0.3 * sp.s : 0.34 * sp.s;
       q.identity();
       tmpM.compose(
         new THREE.Vector3(sp.x, h / 2, sp.z),
         q,
-        new THREE.Vector3(sp.palm ? 0.55 : sp.s, h / 0.3, sp.palm ? 0.55 : sp.s),
+        new THREE.Vector3(sp.s * (upside ? 0.8 : 1), h / 0.3, sp.s * (upside ? 0.8 : 1)),
       );
       trunks.current?.setMatrixAt(k, tmpM);
-      if (sp.palm) {
-        for (let leaf = 0; leaf < 9; leaf++) {
-          const angle = (leaf / 9) * Math.PI * 2 + sp.shade * 0.5;
-          const dir = new THREE.Vector3(
-            Math.cos(angle),
-            -0.32 + hash(k, leaf) * 0.18,
-            Math.sin(angle),
-          );
-          q.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+      if (sp.pine) {
+        // Three stacked cones, narrowing to the top.
+        for (let tier = 0; tier < 3; tier++) {
+          const w = (0.5 - tier * 0.12) * sp.s * (upside ? 0.55 : 1);
           tmpM.compose(
-            new THREE.Vector3(sp.x, h, sp.z),
+            new THREE.Vector3(sp.x, h + (0.12 + tier * 0.16) * sp.s, sp.z),
             q,
-            new THREE.Vector3(0.26 * sp.s, 1.15 * sp.s, 0.2 * sp.s),
+            new THREE.Vector3(w, 0.32 * sp.s, w),
           );
-          fronds.current?.setMatrixAt(f++, tmpM);
+          tiers.current?.setMatrixAt(f++, tmpM);
         }
-      } else {
+      } else if (!upside) {
         const clusters = [
           [0, 0, 0],
-          [-0.38, -0.06, 0],
-          [0.38, -0.05, 0],
-          [0, -0.04, -0.36],
-          [0, -0.03, 0.36],
+          [-0.3, -0.05, 0],
+          [0.3, -0.04, 0],
+          [0, -0.03, -0.28],
+          [0, -0.02, 0.28],
         ];
         clusters.forEach(([ox, oy, oz], leaf) => {
           tmpM.compose(
             new THREE.Vector3(sp.x + ox * sp.s, h + 0.18 * sp.s + oy * sp.s, sp.z + oz * sp.s),
             q,
             new THREE.Vector3(
-              (leaf === 0 ? 0.58 : 0.45) * sp.s,
-              (leaf === 0 ? 0.48 : 0.4) * sp.s,
-              (leaf === 0 ? 0.58 : 0.45) * sp.s,
+              (leaf === 0 ? 0.52 : 0.4) * sp.s,
+              (leaf === 0 ? 0.46 : 0.36) * sp.s,
+              (leaf === 0 ? 0.52 : 0.4) * sp.s,
             ),
           );
           crowns.current?.setMatrixAt(c, tmpM);
-          tmpC.setHSL(0.27 + sp.shade * 0.08, 0.38, 0.38 + hash(k, leaf) * 0.08);
-          crowns.current?.setColorAt(c++, tmpC);
+          crowns.current?.setColorAt(c++, autumn(sp.shade, leaf, tmpC));
         });
       }
     });
@@ -410,11 +437,11 @@ export function Trees({ grid }: { grid: Tile[] }) {
       crowns.current.instanceMatrix.needsUpdate = true;
       if (crowns.current.instanceColor) crowns.current.instanceColor.needsUpdate = true;
     }
-    if (fronds.current) {
-      fronds.current.count = f;
-      fronds.current.instanceMatrix.needsUpdate = true;
+    if (tiers.current) {
+      tiers.current.count = f;
+      tiers.current.instanceMatrix.needsUpdate = true;
     }
-  }, [spots]);
+  }, [spots, upside]);
 
   useFrame(({ clock }) => {
     treeTime.value = clock.elapsedTime;
@@ -425,11 +452,11 @@ export function Trees({ grid }: { grid: Tile[] }) {
       <instancedMesh
         ref={trunks}
         args={[undefined, undefined, spots.length + 1]}
-        castShadow
+        castShadow={!upside}
         frustumCulled={false}
       >
         <cylinderGeometry args={[0.022, 0.035, 0.3, 5]} />
-        <meshStandardMaterial color="#6b4f35" flatShading />
+        <meshStandardMaterial color={upside ? "#2a2c30" : "#5e4632"} flatShading />
       </instancedMesh>
       <instancedMesh
         ref={crowns}
@@ -440,18 +467,18 @@ export function Trees({ grid }: { grid: Tile[] }) {
         <sphereGeometry args={[0.2, 14, 10]} />
       </instancedMesh>
       <instancedMesh
-        ref={fronds}
-        args={[undefined, frondMat, Math.max(1, spots.length * 9)]}
-        castShadow
+        ref={tiers}
+        args={[undefined, tierMat, Math.max(1, spots.length * 3)]}
+        castShadow={!upside}
         frustumCulled={false}
       >
-        <coneGeometry args={[0.14, 1, 8]} />
+        <coneGeometry args={[0.5, 1, 8]} />
       </instancedMesh>
     </group>
   );
 }
 
-/** Zebra stripes, including the Bukit Bintang scramble crossing. */
+/** Zebra crossings on Main Street. */
 export function Crossings({ grid }: { grid: Tile[] }) {
   const ref = useRef<THREE.InstancedMesh>(null);
   const stripes = useMemo(() => {
@@ -466,9 +493,6 @@ export function Crossings({ grid }: { grid: Tile[] }) {
         out.push({ x: x - 0.38, z: z + k * 0.16, rot: Math.PI / 2 });
         out.push({ x: x + 0.38, z: z + k * 0.16, rot: Math.PI / 2 });
       }
-      // The diagonal scramble legs.
-      out.push({ x, z, rot: Math.PI / 4 });
-      out.push({ x, z, rot: -Math.PI / 4 });
     }
     return out;
   }, [grid]);

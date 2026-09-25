@@ -10,9 +10,11 @@ export type TileKind =
   | "forest"
   | "rubble"
   | "water"
+  | "rail"
   | "landmark";
 
 export const LANDMARK_SHAPES = [
+  // Generic structures an event can put up.
   "tower",
   "dome",
   "pyramid",
@@ -21,28 +23,28 @@ export const LANDMARK_SHAPES = [
   "blob",
   "spire",
   "arch",
-  "twin_towers",
-  "needle",
-  "supertall",
-  "mosque",
-  "colonial",
-  "crown_tower",
-  "mall",
-  "green_facade",
-  "twin_block",
-  "art_deco",
-  "hawker",
-  "shophouses",
   "stadium",
-  "convention",
   "flagpole",
-  "pavilion",
-  "gold_box",
-  "sign_block",
-  "slim_pyramid",
-  "exoskeleton",
-  "curve_tower",
   "plaza",
+  // Small-town buildings.
+  "lab",
+  "radio_tower",
+  "cabin",
+  "water_tower",
+  "victorian",
+  "church",
+  "cinema",
+  "town_hall",
+  "video_store",
+  "arcade",
+  "police",
+  "diner",
+  "gas_station",
+  "school",
+  "mall",
+  "junkyard",
+  "barn",
+  "billboard",
 ] as const;
 export type LandmarkShape = (typeof LANDMARK_SHAPES)[number];
 
@@ -77,8 +79,8 @@ export interface Stats {
   money: number;
   /** 0 – 100 */
   pollution: number;
-  /** 0 – 100 */
-  chaos: number;
+  /** 0 – 100: how far the Upside Down has broken through. */
+  rift: number;
 }
 
 export type StatKey = keyof Stats;
@@ -92,17 +94,17 @@ export interface OngoingEffect {
 export type EventScale = "minor" | "citywide" | "apocalyptic";
 
 export const DISTRICT_IDS = [
-  "bukit_bintang",
-  "jalan_alor",
-  "changkat",
-  "klcc",
-  "raja_chulan",
-  "trx",
-  "imbi",
-  "pudu",
-  "bukit_nanas",
-  "dang_wangi",
-  "ampang",
+  "downtown",
+  "elm_street",
+  "oak_hill",
+  "high_school",
+  "mall",
+  "lab",
+  "woods",
+  "mirror_lake",
+  "pine_acres",
+  "farms",
+  "junkyard",
   "outskirts",
 ] as const;
 export type DistrictId = (typeof DISTRICT_IDS)[number];
@@ -112,6 +114,7 @@ export const TILE_TARGETS = [
   "center",
   "edge",
   "river",
+  "railroad",
   "residential",
   "commercial",
   "towers",
@@ -147,6 +150,7 @@ export interface Quote {
 // --- Spectacle: purely visual choreography for an event ---------------------
 
 export const ACTOR_KINDS = [
+  // Set pieces
   "whale",
   "meteor",
   "giant_object",
@@ -160,21 +164,21 @@ export const ACTOR_KINDS = [
   "wave",
   "storm",
   "fireworks",
-  "tapir",
-  "hornbill",
-  "monitor_lizard",
-  "durian",
-  "grab_swarm",
   "hot_air_balloon",
-  "lion_dance",
-  "procession",
+  // Small-town life
   "parade",
-  "festive_lights",
-  "haze",
+  "kids_on_bikes",
+  "black_vans",
+  "christmas_lights",
+  // The Upside Down
+  "rift",
+  "vines",
+  "spores",
+  "shadow",
+  // Mishaps
+  "blackout",
   "sinkhole",
   "landslide",
-  "blackout",
-  "lrt_breakdown",
 ] as const;
 export type ActorKind = (typeof ACTOR_KINDS)[number];
 
@@ -184,7 +188,7 @@ export type ActorShape = (typeof ACTOR_SHAPES)[number];
 export const CROWD_REACTIONS = ["flee", "gather", "celebrate", "ignore"] as const;
 export type CrowdReaction = (typeof CROWD_REACTIONS)[number];
 
-export const RESPONDERS = ["fire", "police", "ambulance", "army", "cleanup"] as const;
+export const RESPONDERS = ["fire", "police", "ambulance", "agents", "cleanup"] as const;
 export type Responder = (typeof RESPONDERS)[number];
 
 export interface Actor {

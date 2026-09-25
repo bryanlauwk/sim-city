@@ -5,566 +5,8 @@ import * as THREE from "three";
 import type { Landmark, Tile } from "@/lib/city/types";
 import { tileX, tileZ } from "./common";
 import { Puffs } from "./vfx";
-import { useNormalMap, useSurfaceMap } from "./actorParts";
-import { textureProps } from "./textures";
-
-function Mat({
-  color,
-  metal = 0,
-  map,
-  normalMap,
-  roughness = 0.58,
-}: {
-  color: string;
-  metal?: number;
-  map?: THREE.Texture;
-  normalMap?: THREE.Texture;
-  roughness?: number;
-}) {
-  // No environment map in the scene, so keep metalness low or surfaces go black.
-  return (
-    <meshStandardMaterial
-      color={color}
-      {...textureProps(map, normalMap, 0.22)}
-      roughness={roughness}
-      metalness={metal * 0.25}
-    />
-  );
-}
-
-function TwinTower({
-  x,
-  h,
-  color,
-  map,
-}: {
-  x: number;
-  h: number;
-  color: string;
-  map: THREE.Texture;
-}) {
-  const tiers = 6;
-  return (
-    <group position={[x, 0, 0]}>
-      {Array.from({ length: tiers }, (_, k) => {
-        const segH = (h * 0.82) / tiers;
-        const r = 0.17 - k * 0.018;
-        return (
-          <mesh key={k} castShadow position={[0, segH * (k + 0.5), 0]}>
-            <cylinderGeometry args={[r * 0.97, r, segH, 8]} />
-            <Mat color={color} metal={0.35} map={map} roughness={0.3} />
-          </mesh>
-        );
-      })}
-      <mesh castShadow position={[0, h * 0.91, 0]}>
-        <coneGeometry args={[0.05, h * 0.18, 6]} />
-        <Mat color={color} metal={0.45} map={map} roughness={0.32} />
-      </mesh>
-    </group>
-  );
-}
-
-export function LandmarkMesh({ lm }: { lm: Landmark }) {
-  const h = lm.height;
-  const glass = useSurfaceMap("/textures/curtain-glass.webp");
-  const plaster = useSurfaceMap("/textures/heritage-plaster.webp");
-  const plasterNormal = useNormalMap("/textures/heritage-plaster.normal.webp");
-  const roof = useSurfaceMap("/textures/terracotta-roof.webp");
-  const roofNormal = useNormalMap("/textures/terracotta-roof.normal.webp");
-  const mat = <Mat color={lm.color} />;
-  switch (lm.shape) {
-    case "twin_towers":
-      return (
-        <group>
-          <TwinTower x={-0.22} h={h} color="#ffffff" map={glass} />
-          <TwinTower x={0.22} h={h} color="#ffffff" map={glass} />
-          {/* The skybridge on the 41st/42nd floors */}
-          <mesh castShadow position={[0, h * 0.42, 0]}>
-            <boxGeometry args={[0.3, 0.05, 0.08]} />
-            <Mat color="#9aa3ad" metal={0.4} />
-          </mesh>
-        </group>
-      );
-    case "needle":
-      return (
-        <group>
-          <mesh castShadow position={[0, h * 0.37, 0]}>
-            <cylinderGeometry args={[0.05, 0.09, h * 0.74, 8]} />
-            {mat}
-          </mesh>
-          <mesh castShadow position={[0, h * 0.77, 0]} scale={[1, 0.8, 1]}>
-            <sphereGeometry args={[0.3, 12, 8]} />
-            <Mat color="#ffffff" metal={0.2} map={glass} roughness={0.24} />
-          </mesh>
-          <mesh castShadow position={[0, h * 0.92, 0]}>
-            <cylinderGeometry args={[0.01, 0.02, h * 0.22, 4]} />
-            {mat}
-          </mesh>
-        </group>
-      );
-    case "supertall":
-      return (
-        <group>
-          <mesh castShadow position={[0, h * 0.42, 0]}>
-            <cylinderGeometry args={[0.1, 0.32, h * 0.84, 6]} />
-            <Mat color="#ffffff" metal={0.25} map={glass} roughness={0.28} />
-          </mesh>
-          <mesh castShadow position={[0, h * 0.92, 0]}>
-            <coneGeometry args={[0.05, h * 0.18, 6]} />
-            {mat}
-          </mesh>
-        </group>
-      );
-    case "mosque":
-      return (
-        <group scale={Math.max(0.7, h)}>
-          <mesh castShadow position={[0, 0.12, 0]}>
-            <boxGeometry args={[0.6, 0.24, 0.6]} />
-            <Mat color="#ffffff" map={plaster} normalMap={plasterNormal} />
-          </mesh>
-          <mesh castShadow position={[0, 0.24, 0]}>
-            <sphereGeometry args={[0.22, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2]} />
-            {mat}
-          </mesh>
-          {[-0.36, 0.36].map((x) => (
-            <group key={x} position={[x, 0, 0.36]}>
-              <mesh castShadow position={[0, 0.3, 0]}>
-                <cylinderGeometry args={[0.035, 0.04, 0.6, 6]} />
-                <Mat color="#ffffff" map={plaster} normalMap={plasterNormal} />
-              </mesh>
-              <mesh castShadow position={[0, 0.65, 0]}>
-                <coneGeometry args={[0.05, 0.1, 6]} />
-                {mat}
-              </mesh>
-            </group>
-          ))}
-        </group>
-      );
-    case "colonial":
-      return (
-        <group scale={Math.max(0.8, h)}>
-          <mesh castShadow position={[0, 0.14, 0]}>
-            <boxGeometry args={[0.9, 0.28, 0.38]} />
-            <Mat color="#ffffff" map={plaster} normalMap={plasterNormal} />
-          </mesh>
-          <mesh castShadow position={[0, 0.42, 0]}>
-            <boxGeometry args={[0.16, 0.34, 0.16]} />
-            {mat}
-          </mesh>
-          {[
-            [0, 0.62],
-            [-0.36, 0.32],
-            [0.36, 0.32],
-          ].map(([x, y]) => (
-            <mesh key={x} castShadow position={[x, y, 0]}>
-              <sphereGeometry args={[0.09, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2]} />
-              <Mat color="#4c8a78" metal={0.3} />
-            </mesh>
-          ))}
-        </group>
-      );
-    case "plaza":
-      return (
-        <group>
-          <mesh receiveShadow position={[0, 0.012, 0]}>
-            <boxGeometry args={[0.98, 0.02, 0.98]} />
-            <Mat color="#d8d2c4" />
-          </mesh>
-          {[-0.3, 0.3].map((x) => (
-            <mesh key={x} castShadow position={[x, 0.08, 0.3]}>
-              <sphereGeometry args={[0.1, 6, 5]} />
-              <Mat color="#5f9e4f" />
-            </mesh>
-          ))}
-        </group>
-      );
-    case "pavilion":
-      // Podium with the crystal atrium at the front, office and residence towers behind.
-      return (
-        <group>
-          <mesh castShadow position={[0, 0.25, 0]}>
-            <boxGeometry args={[0.96, 0.5, 0.9]} />
-            <Mat color={lm.color} />
-          </mesh>
-          <mesh castShadow position={[0, 0.34, 0.42]}>
-            <cylinderGeometry args={[0.26, 0.3, 0.68, 8, 1]} />
-            <meshStandardMaterial color="#b9e0f2" roughness={0.1} transparent opacity={0.8} />
-          </mesh>
-          <mesh position={[0, 0.72, 0.42]}>
-            <octahedronGeometry args={[0.1, 0]} />
-            <meshStandardMaterial color="#d8f3ff" emissive="#9fdcff" emissiveIntensity={0.6} />
-          </mesh>
-          <mesh position={[0, 0.46, 0.46]}>
-            <boxGeometry args={[0.5, 0.07, 0.02]} />
-            <meshStandardMaterial color="#6b2c91" emissive="#6b2c91" emissiveIntensity={0.4} />
-          </mesh>
-          <mesh castShadow position={[-0.22, 0.5 + (h - 0.5) / 2, -0.22]}>
-            <boxGeometry args={[0.3, h - 0.5, 0.3]} />
-            <Mat color="#c9d4dc" metal={0.3} />
-          </mesh>
-          <mesh castShadow position={[0.25, 0.5 + (h * 0.7 - 0.5) / 2, -0.25]}>
-            <boxGeometry args={[0.26, h * 0.7 - 0.5, 0.26]} />
-            <Mat color="#e1dccf" />
-          </mesh>
-        </group>
-      );
-    case "gold_box":
-      return (
-        <group>
-          <mesh castShadow position={[0, h / 2, 0]}>
-            <boxGeometry args={[0.9, h, 0.86]} />
-            <Mat color={lm.color} metal={0.6} />
-          </mesh>
-          {[-0.33, -0.11, 0.11, 0.33].map((x) => (
-            <mesh key={x} position={[x, h / 2, 0.44]}>
-              <boxGeometry args={[0.04, h * 0.9, 0.03]} />
-              <Mat color="#6d5526" />
-            </mesh>
-          ))}
-        </group>
-      );
-    case "sign_block":
-      return (
-        <group>
-          <mesh castShadow position={[0, h / 2, 0]}>
-            <boxGeometry args={[0.9, h, 0.86]} />
-            <Mat color="#ece6da" />
-          </mesh>
-          <mesh position={[0, h * 0.7, 0.44]}>
-            <boxGeometry args={[0.82, h * 0.3, 0.03]} />
-            <meshStandardMaterial color={lm.color} emissive={lm.color} emissiveIntensity={0.35} />
-          </mesh>
-          <mesh position={[0.4, h * 0.45, 0.44]}>
-            <boxGeometry args={[0.07, h * 0.7, 0.07]} />
-            <meshStandardMaterial color={lm.color} emissive={lm.color} emissiveIntensity={0.35} />
-          </mesh>
-          <mesh position={[0, 0.12, 0.44]}>
-            <boxGeometry args={[0.8, 0.18, 0.02]} />
-            <meshStandardMaterial color="#a9cde0" roughness={0.1} />
-          </mesh>
-        </group>
-      );
-    case "slim_pyramid":
-      return (
-        <group>
-          <mesh castShadow position={[0, (h * 0.86) / 2, 0]}>
-            <boxGeometry args={[0.36, h * 0.86, 0.36]} />
-            <Mat color={lm.color} metal={0.4} />
-          </mesh>
-          <mesh
-            castShadow
-            position={[0, h * 0.86 + (h * 0.14) / 2, 0]}
-            rotation={[0, Math.PI / 4, 0]}
-          >
-            <coneGeometry args={[0.26, h * 0.14, 4]} />
-            <Mat color="#dfe5ea" />
-          </mesh>
-        </group>
-      );
-    case "exoskeleton":
-      return (
-        <group>
-          <mesh castShadow position={[0, h / 2, 0]}>
-            <boxGeometry args={[0.4, h, 0.4]} />
-            <Mat color="#7f9cb1" metal={0.3} />
-          </mesh>
-          {[0, 1, 2, 3].map((k) => (
-            <mesh
-              key={k}
-              castShadow
-              position={[
-                k < 2 ? (k === 0 ? -0.21 : 0.21) : 0,
-                h / 2,
-                k >= 2 ? (k === 2 ? -0.21 : 0.21) : 0,
-              ]}
-              rotation={k < 2 ? [0.25, 0, 0] : [0, 0, 0.25]}
-            >
-              <boxGeometry args={[k < 2 ? 0.03 : 0.42, h * 1.02, k < 2 ? 0.42 : 0.03]} />
-              <Mat color={lm.color} />
-            </mesh>
-          ))}
-        </group>
-      );
-    case "curve_tower": {
-      const segs = 7;
-      return (
-        <group>
-          {Array.from({ length: segs }, (_, k) => (
-            <mesh
-              key={k}
-              castShadow
-              position={[Math.sin(k * 0.5) * 0.06, (h / segs) * (k + 0.5), 0]}
-            >
-              <cylinderGeometry args={[0.24 - k * 0.012, 0.25 - k * 0.012, h / segs, 10]} />
-              <Mat color={lm.color} metal={0.3} />
-            </mesh>
-          ))}
-        </group>
-      );
-    }
-    case "crown_tower": {
-      // The Exchange 106: a square glass shaft that narrows in steps to a crown.
-      const tiers = [0.34, 0.31, 0.28, 0.25, 0.21];
-      const seg = (h * 0.85) / tiers.length;
-      return (
-        <group>
-          {tiers.map((w, k) => (
-            <mesh key={k} castShadow position={[0, seg * (k + 0.5), 0]}>
-              <boxGeometry args={[w * 2, seg, w * 2]} />
-              <Mat color={lm.color} metal={0.4} />
-            </mesh>
-          ))}
-          <mesh castShadow position={[0, h * 0.92, 0]} rotation={[0, Math.PI / 4, 0]}>
-            <coneGeometry args={[0.3, h * 0.16, 4, 1, true]} />
-            <Mat color="#dfe6ec" />
-          </mesh>
-        </group>
-      );
-    }
-    case "mall":
-      return (
-        <group>
-          <mesh castShadow position={[0, 0.22, 0]}>
-            <boxGeometry args={[0.92, 0.44, 0.9]} />
-            <Mat color={lm.color} />
-          </mesh>
-          {/* Curved glass entrance facing the street */}
-          <mesh castShadow position={[0, 0.2, 0.3]} rotation={[0, 0, 0]}>
-            <cylinderGeometry args={[0.32, 0.32, 0.4, 12, 1, false, -Math.PI / 2, Math.PI]} />
-            <meshStandardMaterial color="#9cc3d8" roughness={0.2} transparent opacity={0.85} />
-          </mesh>
-          {h > 1 && (
-            <mesh castShadow position={[0.15, 0.44 + (h - 0.4) / 2, -0.2]}>
-              <boxGeometry args={[0.45, h - 0.4, 0.4]} />
-              <Mat color={lm.color} />
-            </mesh>
-          )}
-        </group>
-      );
-    case "green_facade":
-      return (
-        <group>
-          <mesh castShadow position={[0, h / 2, 0]}>
-            <boxGeometry args={[0.86, h, 0.86]} />
-            <Mat color={lm.color} />
-          </mesh>
-          {[0.25, 0.5, 0.75].map((f) => (
-            <mesh key={f} position={[0, h * f, 0]}>
-              <boxGeometry args={[0.88, 0.03, 0.88]} />
-              <Mat color="#f2f2ea" />
-            </mesh>
-          ))}
-        </group>
-      );
-    case "twin_block":
-      return (
-        <group>
-          <mesh castShadow position={[0, 0.2, 0]}>
-            <boxGeometry args={[0.95, 0.4, 0.9]} />
-            <Mat color={lm.color} />
-          </mesh>
-          {[-0.24, 0.24].map((x) => (
-            <mesh key={x} castShadow position={[x, 0.4 + (h - 0.4) / 2, 0]}>
-              <boxGeometry args={[0.36, h - 0.4, 0.5]} />
-              <Mat color={lm.color} />
-            </mesh>
-          ))}
-          <mesh position={[0, h * 0.8, 0.26]}>
-            <boxGeometry args={[0.5, 0.12, 0.02]} />
-            <Mat color="#c22e2e" />
-          </mesh>
-        </group>
-      );
-    case "art_deco":
-      return (
-        <group>
-          <mesh castShadow position={[0, 0.16, 0]}>
-            <boxGeometry args={[0.95, 0.32, 0.6]} />
-            <Mat color={lm.color} />
-          </mesh>
-          <mesh castShadow position={[0, 0.3, 0.05]}>
-            <boxGeometry args={[0.36, 0.6 * h, 0.5]} />
-            <Mat color="#f1f4f6" />
-          </mesh>
-          <mesh position={[0, 0.34, 0.31]}>
-            <boxGeometry args={[0.2, 0.2, 0.02]} />
-            <Mat color={lm.color} />
-          </mesh>
-        </group>
-      );
-    case "hawker":
-      // Stalls under canopies, strung with red lanterns.
-      return (
-        <group>
-          {[-0.3, 0, 0.3].map((z, k) => (
-            <group key={z} position={[k % 2 ? 0.18 : -0.18, 0, z]}>
-              <mesh castShadow position={[0, 0.1, 0]}>
-                <boxGeometry args={[0.28, 0.12, 0.2]} />
-                <Mat color="#dcd6c8" />
-              </mesh>
-              <mesh castShadow position={[0, 0.25, 0]}>
-                <boxGeometry args={[0.34, 0.03, 0.26]} />
-                <Mat color={lm.color} />
-              </mesh>
-            </group>
-          ))}
-          {[-0.36, -0.12, 0.12, 0.36].map((z) => (
-            <mesh key={z} position={[0, 0.34, z]}>
-              <sphereGeometry args={[0.04, 8, 6]} />
-              <meshStandardMaterial color="#e0322b" emissive="#ff3b2b" emissiveIntensity={0.8} />
-            </mesh>
-          ))}
-        </group>
-      );
-    case "shophouses":
-      return (
-        <group>
-          {["#e8b04a", "#7cc3b1", "#e98f8f", "#9db8e0"].map((c, k) => (
-            <group key={c} position={[-0.33 + k * 0.22, 0, 0]}>
-              <mesh castShadow position={[0, 0.22 * h * 2, 0]}>
-                <boxGeometry args={[0.2, 0.44 * h * 2, 0.7]} />
-                <Mat color={c} map={plaster} normalMap={plasterNormal} roughness={0.86} />
-              </mesh>
-              <mesh castShadow position={[0, 0.46 * h * 2, 0]}>
-                <boxGeometry args={[0.22, 0.05, 0.74]} />
-                <Mat color="#ffffff" map={roof} normalMap={roofNormal} roughness={0.9} />
-              </mesh>
-            </group>
-          ))}
-        </group>
-      );
-    case "stadium":
-      return (
-        <group>
-          <mesh position={[0, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]} scale={[1, 0.7, 1]}>
-            <circleGeometry args={[0.36, 20]} />
-            <Mat color="#5fa84f" />
-          </mesh>
-          <mesh
-            castShadow
-            position={[0, 0.1, 0]}
-            rotation={[-Math.PI / 2, 0, 0]}
-            scale={[1, 0.7, 1]}
-          >
-            <torusGeometry args={[0.4, 0.08, 6, 24]} />
-            <Mat color={lm.color} />
-          </mesh>
-        </group>
-      );
-    case "convention":
-      return (
-        <group>
-          <mesh castShadow position={[0, 0.15, 0]}>
-            <boxGeometry args={[0.95, 0.3, 0.7]} />
-            <Mat color={lm.color} />
-          </mesh>
-          <mesh castShadow position={[0, 0.3, 0]} rotation={[0, 0, Math.PI / 2]}>
-            <cylinderGeometry args={[0.3, 0.3, 0.95, 12, 1, false, 0, Math.PI]} />
-            <Mat color="#8fa4b4" />
-          </mesh>
-        </group>
-      );
-    case "flagpole":
-      return (
-        <group>
-          <mesh castShadow position={[0, h / 2, 0]}>
-            <cylinderGeometry args={[0.015, 0.02, h, 6]} />
-            <Mat color="#f2f2f2" />
-          </mesh>
-          {/* Jalur Gemilang */}
-          <mesh position={[0.17, h - 0.1, 0]}>
-            <boxGeometry args={[0.32, 0.18, 0.01]} />
-            <meshStandardMaterial color="#cc0001" />
-          </mesh>
-          <mesh position={[0.08, h - 0.06, 0.006]}>
-            <boxGeometry args={[0.14, 0.1, 0.01]} />
-            <meshStandardMaterial color="#010066" />
-          </mesh>
-          <mesh position={[0.08, h - 0.06, 0.012]}>
-            <circleGeometry args={[0.03, 10]} />
-            <meshStandardMaterial color="#ffcc00" />
-          </mesh>
-        </group>
-      );
-    case "tower":
-      return (
-        <mesh castShadow position={[0, h / 2, 0]}>
-          <cylinderGeometry args={[0.3, 0.38, h, 8]} />
-          {mat}
-        </mesh>
-      );
-    case "dome":
-      return (
-        <mesh castShadow scale={[1, h / 0.45, 1]}>
-          <sphereGeometry args={[0.45, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2]} />
-          {mat}
-        </mesh>
-      );
-    case "pyramid":
-      return (
-        <mesh castShadow position={[0, h / 2, 0]} rotation={[0, Math.PI / 4, 0]}>
-          <coneGeometry args={[0.6, h, 4]} />
-          {mat}
-        </mesh>
-      );
-    case "spire":
-      return (
-        <mesh castShadow position={[0, h / 2, 0]}>
-          <coneGeometry args={[0.22, h, 6]} />
-          {mat}
-        </mesh>
-      );
-    case "blob":
-      return (
-        <mesh castShadow position={[0, h / 2, 0]} scale={[1, h / 0.8, 1]}>
-          <icosahedronGeometry args={[0.4, 1]} />
-          {mat}
-        </mesh>
-      );
-    case "arch":
-      return (
-        <mesh castShadow rotation={[0, Math.PI / 4, 0]} scale={[1, h / 0.4, 1]}>
-          <torusGeometry args={[0.35, 0.08, 6, 12, Math.PI]} />
-          {mat}
-        </mesh>
-      );
-    case "crater":
-      return (
-        <group>
-          <mesh position={[0, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-            <circleGeometry args={[0.45, 10]} />
-            <meshStandardMaterial color="#2b241f" roughness={0.96} />
-          </mesh>
-          <mesh
-            position={[0, 0.03, 0]}
-            rotation={[-Math.PI / 2, 0, 0]}
-            scale={[1, 1, Math.max(0.3, h)]}
-          >
-            <torusGeometry args={[0.46, 0.07, 4, 10]} />
-            {mat}
-          </mesh>
-        </group>
-      );
-    case "statue":
-    default:
-      return (
-        <group>
-          <mesh castShadow position={[0, 0.1, 0]}>
-            <boxGeometry args={[0.5, 0.2, 0.5]} />
-            <Mat color="#b8b2a6" />
-          </mesh>
-          <mesh castShadow position={[0, 0.2 + h * 0.4, 0]}>
-            <capsuleGeometry args={[0.12, h * 0.6, 3, 6]} />
-            {mat}
-          </mesh>
-          <mesh castShadow position={[0, 0.2 + h * 0.85, 0]}>
-            <sphereGeometry args={[0.13, 8, 6]} />
-            {mat}
-          </mesh>
-        </group>
-      );
-  }
-}
+import { LandmarkMesh, Mat } from "./Landmarks";
+import { UpsideContext } from "./upside";
 
 /** A burning building: flickering flames and a column of smoke, as soft particles. */
 function Fire({ seed, y }: { seed: number; y: number }) {
@@ -633,7 +75,7 @@ function Rubble({ seed }: { seed: number }) {
       {bits.map((b, i) => (
         <mesh key={i} position={b.p} rotation={[b.r, b.r, 0]} castShadow>
           <boxGeometry args={[b.s, b.s, b.s]} />
-          <meshStandardMaterial color={i % 2 ? "#6e655b" : "#9a9084"} roughness={0.94} />
+          <Mat color={i % 2 ? "#6e655b" : "#9a9084"} roughness={0.94} />
         </mesh>
       ))}
     </group>
@@ -642,7 +84,9 @@ function Rubble({ seed }: { seed: number }) {
 
 function roofHeight(tile: Tile): number {
   if (tile.kind === "landmark") return Math.min(2, (tile.landmark?.height ?? 1) * 0.6);
-  return { house: 0.45, shop: 0.8, tower: 2, park: 0.3, forest: 0.35 }[tile.kind as string] ?? 0.1;
+  return (
+    { house: 0.45, shop: 0.45, tower: 0.75, park: 0.3, forest: 0.35 }[tile.kind as string] ?? 0.1
+  );
 }
 
 function PopIn({ children }: { children: React.ReactNode }) {
@@ -658,12 +102,12 @@ function PopIn({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** Landmarks, fires, rubble and floods — the few tiles that need their own meshes. */
+/** How high a landmark's label floats, as a share of its height. */
 const LABEL_HEIGHT: Partial<Record<Landmark["shape"], number>> = {
-  twin_towers: 1.25,
-  needle: 1,
-  supertall: 1,
-  crown_tower: 1,
+  radio_tower: 1.02,
+  water_tower: 1.05,
+  town_hall: 1.05,
+  church: 1,
 };
 
 /** Label anchors over the landmarks, one per name. */
@@ -686,11 +130,17 @@ export function landmarkLabelSpecs(grid: Tile[]): LabelSpec[] {
   return out;
 }
 
-export function TileFx({ grid, roofs }: { grid: Tile[]; roofs?: Map<number, number> }) {
+/**
+ * Landmarks, fires, rubble and floods — the few tiles that need their own
+ * meshes. In the Upside Down (`upside`) there is no fire and no flood, only
+ * the dead copies of the landmarks and the rubble.
+ */
+export function TileFx({ grid, upside = false }: { grid: Tile[]; upside?: boolean }) {
   return (
-    <group>
+    <UpsideContext.Provider value={upside}>
       {grid.map((t, i) => {
-        const special = t.kind === "landmark" || t.kind === "rubble" || t.fire > 0 || t.flood > 0;
+        const special =
+          t.kind === "landmark" || t.kind === "rubble" || (!upside && (t.fire > 0 || t.flood > 0));
         if (!special) return null;
         return (
           <group key={i} position={[tileX(i), 0, tileZ(i)]}>
@@ -702,8 +152,8 @@ export function TileFx({ grid, roofs }: { grid: Tile[]; roofs?: Map<number, numb
               </PopIn>
             )}
             {t.kind === "rubble" && <Rubble seed={i + t.builtDay} />}
-            {t.fire > 0 && <Fire seed={i} y={roofs?.get(i) ?? roofHeight(t)} />}
-            {t.flood > 0 && (
+            {!upside && t.fire > 0 && <Fire seed={i} y={roofHeight(t)} />}
+            {!upside && t.flood > 0 && (
               <mesh position={[0, 0.1, 0]}>
                 <boxGeometry args={[1, 0.14, 1]} />
                 <meshStandardMaterial color="#3b8fd6" transparent opacity={0.6} />
@@ -712,6 +162,6 @@ export function TileFx({ grid, roofs }: { grid: Tile[]; roofs?: Map<number, numb
           </group>
         );
       })}
-    </group>
+    </UpsideContext.Provider>
   );
 }

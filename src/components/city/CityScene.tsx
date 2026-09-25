@@ -1,29 +1,30 @@
-import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, PerformanceMonitor } from "@react-three/drei";
 import * as THREE from "three";
 import type { CityState } from "@/lib/city/types";
-import { KitBuildings, LocalHouses } from "./scene/Buildings";
+import { TownBuildings } from "./scene/Buildings";
 import { createBus, hash, type WorldBus } from "./scene/common";
 import { env } from "./scene/env";
 import { Crossings, Ground, StreetLamps, Trees } from "./scene/Ground";
-import { KLStreetProps } from "./scene/KLStreetProps";
-import { pieceHeight, realTiles, useOsmBuildings } from "./scene/osmBuildings";
-import { RealBuildings } from "./scene/RealBuildings";
+import { TownProps } from "./scene/TownProps";
 import { preloadActorTextures } from "./scene/textures";
 import { Life } from "./scene/Life";
 import { PhotoSky } from "./scene/PhotoSky";
 import { PostFX } from "./scene/PostFX";
-import { Rail } from "./scene/Rail";
+import { Railroad } from "./scene/Railroad";
 import { Sky } from "./scene/Sky";
 import { SpectacleView, impactTime, type SpectacleRun } from "./scene/Spectacle";
 import { TileFx, landmarkLabelSpecs } from "./scene/TileFx";
 import { LabelOverlay, LabelProjector, type LabelRegistry, type LabelSpec } from "./scene/Labels";
+import { RiftLeak, UpsideDownWorld } from "./scene/UpsideDown";
 
 export type { SpectacleRun };
 
-// Only downloaded when there's a Google key to use it with.
-const GoogleTiles = lazy(() => import("./scene/GoogleTiles"));
+/** Vertical gap between the town and the Upside Down hanging beneath it. */
+const GAP = 0.3;
+/** How long the screen stays dark while the world turns over. */
+const FLIP_MS = 700;
 
 export interface SimClock {
   /** performance.now() of the last daily tick. */
@@ -58,9 +59,9 @@ function Shaker({ bus, children }: { bus: WorldBus; children: React.ReactNode })
   return <group ref={ref}>{children}</group>;
 }
 
-// Opening shot: looking north up Jalan Bukit Bintang towards KLCC.
-const OPENING_TARGET = [1, 0, 3] as const;
-const OPENING_CAMERA: [number, number, number] = [-5, 15, 23];
+// Opening shot: looking north over Main Street towards Elm Street and the lab.
+const OPENING_TARGET = [0, 0, -1] as const;
+const OPENING_CAMERA: [number, number, number] = [-5, 14, 20];
 
 /**
  * Key and rim light on the action. They stay mounted at zero brightness
@@ -90,8 +91,15 @@ function ActionLights({ run }: { run: SpectacleRun | null }) {
   );
 }
 
-/** Swoops the camera toward the action when a spectacle starts. */
-function CameraDirector({ run }: { run: SpectacleRun | null }) {
+// Looking north across the Upside Down to the woods, where something stands in the fog.
+const UPSIDE_TARGET = new THREE.Vector3(0, 1.5, -6);
+const UPSIDE_CAMERA = new THREE.Vector3(-3, 5.5, 15);
+
+/**
+ * Swoops the camera toward the action when a spectacle starts, and down to a
+ * low, eerie angle (and back) when the world flips.
+ */
+function CameraDirector({ run, flipped }: { run: SpectacleRun | null; flipped: boolean }) {
   const controls = useThree((s) => s.controls) as unknown as {
     target: THREE.Vector3;
     update: () => void;
@@ -125,6 +133,26 @@ function CameraDirector({ run }: { run: SpectacleRun | null }) {
     controls.update();
   }, [controls]);
 
+  const firstFlip = useRef(true);
+  useEffect(() => {
+    if (!controls) return;
+    // Skip the first render: only an actual flip moves the camera.
+    if (firstFlip.current) {
+      firstFlip.current = false;
+      if (!flipped) return;
+    }
+    move.current = {
+      start: clock.elapsedTime,
+      fromTarget: controls.target.clone(),
+      fromPos: camera.position.clone(),
+      toTarget: flipped
+        ? UPSIDE_TARGET.clone()
+        : new THREE.Vector3(OPENING_TARGET[0], 0, OPENING_TARGET[2]),
+      toPos: flipped ? UPSIDE_CAMERA.clone() : new THREE.Vector3(...OPENING_CAMERA),
+      offset: new THREE.Vector3(),
+    };
+  }, [flipped, controls]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (!run || !controls) {
       follow.current = null;
@@ -145,6 +173,22 @@ function CameraDirector({ run }: { run: SpectacleRun | null }) {
       offset,
     };
     const kind = run.actors[0]?.kind;
+    if (kind === "shadow") {
+      // Get down low and look past the focus to where it rises (the same
+      // direction the Shadow actor picks for itself).
+      const angle = hash(run.id * 31, 23) * Math.PI * 2;
+      const dir = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
+      move.current.toTarget = new THREE.Vector3(run.focus.x, 3, run.focus.z).addScaledVector(
+        dir,
+        6,
+      );
+      move.current.toPos = new THREE.Vector3(run.focus.x, 3.5, run.focus.z).addScaledVector(
+        dir,
+        -10,
+      );
+      follow.current = null;
+      return;
+    }
     if (kind === "kaiju" || kind === "creature") {
       const angle = hash(run.id * 31, 7) * Math.PI * 2;
       follow.current = {
@@ -210,12 +254,8 @@ export interface CitySceneProps {
   /** Bumped when a chain-reaction bulletin fires, for a small tremor. */
   tremor: number;
   showLabels: boolean;
-  /** Google Maps key for the real-city 3D tiles, or null for none. */
-  mapsKey?: string | null;
-  /** Photo mode: Google's Kuala Lumpur instead of the game's city. */
-  photo?: boolean;
-  /** The Google tiles couldn't load (bad key, no billing, offline). */
-  onMapsFail?: () => void;
+  /** Show the Upside Down instead of the town. */
+  upsideDown: boolean;
 }
 
 function CityScene({
@@ -226,9 +266,7 @@ function CityScene({
   onSpectacleDone,
   tremor,
   showLabels,
-  mapsKey = null,
-  photo = false,
-  onMapsFail,
+  upsideDown,
 }: CitySceneProps) {
   const small = typeof window !== "undefined" && window.innerWidth < 640;
   // Post-processing is for larger screens; "?fx=0" turns it off on slow GPUs.
@@ -243,33 +281,31 @@ function CityScene({
     return () => clearTimeout(id);
   }, []);
   const bus = useMemo(createBus, []);
-  // The real city from Google around the map (desktop), or instead of it (photo mode).
-  const [tilesFailed, setTilesFailed] = useState(false);
-  const [tilesReady, setTilesReady] = useState(false);
-  const tilesLoaded = useCallback(() => setTilesReady(true), []);
-  const tiles =
-    !!mapsKey &&
-    !tilesFailed &&
-    (photo || !small) &&
-    typeof window !== "undefined" &&
-    !/[?&]tiles=0\b/.test(window.location.search);
-  const showCity = !(tiles && photo);
-  const mapsFail = useRef(onMapsFail);
-  mapsFail.current = onMapsFail;
-  const tilesFail = useCallback(() => {
-    setTilesFailed(true);
-    mapsFail.current?.();
-  }, []);
-  // Real OpenStreetMap buildings on the tiles that still have them.
-  const osm = useOsmBuildings();
-  const real = useMemo(() => realTiles(city.grid, osm), [city.grid, osm]);
-  const realRoofs = useMemo(() => {
-    const out = new Map<number, number>();
-    for (const p of osm ?? [])
-      if (real.has(p.tile))
-        out.set(p.tile, Math.max(out.get(p.tile) ?? 0, pieceHeight(p, city.grid[p.tile].kind)));
-    return out;
-  }, [osm, real, city.grid]);
+  // Flipping to the Upside Down: the screen goes dark, the world turns over
+  // underneath, and it fades back in on the other side.
+  const [flipped, setFlipped] = useState(upsideDown);
+  const flippedRef = useRef(upsideDown);
+  const [everFlipped, setEverFlipped] = useState(upsideDown);
+  const [curtain, setCurtain] = useState(false);
+  useEffect(() => {
+    // Toggled back before the turn: just lift the curtain again.
+    if (upsideDown === flippedRef.current) {
+      setCurtain(false);
+      return;
+    }
+    setCurtain(true);
+    bus.shake = Math.max(bus.shake, 0.08);
+    const turn = setTimeout(() => {
+      flippedRef.current = upsideDown;
+      setFlipped(upsideDown);
+      if (upsideDown) setEverFlipped(true);
+    }, FLIP_MS / 2);
+    const open = setTimeout(() => setCurtain(false), FLIP_MS);
+    return () => {
+      clearTimeout(turn);
+      clearTimeout(open);
+    };
+  }, [upsideDown, bus]);
   // Fetch actor textures in the background once the city is up, so the
   // first whale or kaiju of the session doesn't wait on a download.
   useEffect(() => {
@@ -331,7 +367,8 @@ function CityScene({
         <Sky
           seed={city.seed}
           day={city.day}
-          chaos={city.stats.chaos}
+          rift={city.stats.rift}
+          upside={flipped}
           pollution={city.stats.pollution}
           getPhase={getPhase}
           bus={bus}
@@ -342,24 +379,30 @@ function CityScene({
         <Suspense fallback={null}>
           <PhotoSky />
         </Suspense>
-        {tiles && mapsKey && (
-          <Suspense fallback={null}>
-            <GoogleTiles apiKey={mapsKey} photo={photo} onFail={tilesFail} onReady={tilesLoaded} />
-          </Suspense>
-        )}
         <Shaker bus={bus}>
-          <group visible={showCity}>
-            <Ground grid={city.grid} backdrop={tiles && tilesReady} />
-            <Trees grid={city.grid} />
-            <Crossings grid={city.grid} />
-            <StreetLamps grid={city.grid} />
-            <KLStreetProps grid={city.grid} />
-            {osm && <RealBuildings grid={city.grid} pieces={osm} tiles={real} />}
-            <KitBuildings grid={city.grid} skip={real} />
-            <LocalHouses grid={city.grid} skip={real} />
-            <TileFx grid={city.grid} roofs={realRoofs} />
-            <Rail bus={bus} />
-            <Life city={city} bus={bus} />
+          {/* The world turns over about a line just under the ground. */}
+          <group position-y={-GAP / 2}>
+            <group rotation-x={flipped ? Math.PI : 0}>
+              <group position-y={GAP / 2}>
+                <group visible={!flipped}>
+                  <Ground grid={city.grid} />
+                  <Trees grid={city.grid} />
+                  <Crossings grid={city.grid} />
+                  <StreetLamps grid={city.grid} />
+                  <TownProps grid={city.grid} />
+                  <TownBuildings grid={city.grid} />
+                  <TileFx grid={city.grid} />
+                  <Railroad grid={city.grid} bus={bus} />
+                  <Life city={city} bus={bus} />
+                  <RiftLeak grid={city.grid} rift={city.stats.rift} />
+                </group>
+                {everFlipped && (
+                  <group position-y={-GAP} rotation-x={Math.PI} visible={flipped}>
+                    <UpsideDownWorld grid={city.grid} />
+                  </group>
+                )}
+              </group>
+            </group>
           </group>
           {spectacle && (
             <SpectacleView
@@ -371,14 +414,14 @@ function CityScene({
             />
           )}
         </Shaker>
-        <CameraDirector run={spectacle} />
+        <CameraDirector run={spectacle} flipped={flipped} />
         <OrbitControls
           makeDefault
           enablePan
           screenSpacePanning={false}
           minDistance={5}
           maxDistance={55}
-          maxPolarAngle={1.3}
+          maxPolarAngle={1.42}
           minPolarAngle={0.3}
         />
         <LabelProjector specs={labels} registry={registry} />
@@ -391,16 +434,13 @@ function CityScene({
           />
         )}
       </Canvas>
-      {osm && showCity && (
-        <a
-          href="https://www.openstreetmap.org/copyright"
-          target="_blank"
-          rel="noreferrer"
-          className="absolute bottom-1 right-2 z-10 text-[9px] text-white/80 [text-shadow:0_1px_2px_rgba(0,0,0,0.6)] hover:underline"
-        >
-          Buildings © OpenStreetMap contributors
-        </a>
-      )}
+      <div
+        aria-hidden
+        className={`pointer-events-none absolute inset-0 z-20 bg-[radial-gradient(circle,#3a0508_0%,#000_70%)] transition-opacity ${
+          curtain ? "opacity-100" : "opacity-0"
+        }`}
+        style={{ transitionDuration: `${FLIP_MS / 2}ms` }}
+      />
       <LabelOverlay specs={labels} registry={registry} showLandmarks={showLabels && !spectacle} />
     </div>
   );

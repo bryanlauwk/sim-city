@@ -63,7 +63,7 @@ const RESPONDER_COLOR: Record<Responder, string> = {
   fire: "#c62f22",
   police: "#1d3f94",
   ambulance: "#f4f4f4",
-  army: "#4b5a32",
+  agents: "#15161a",
   cleanup: "#e6801f",
 };
 
@@ -1227,15 +1227,8 @@ function ImpactBurst({
 // built-in stand-in.
 // ---------------------------------------------------------------------------
 
-const WALKERS = new Set<ActorKind>(["kaiju", "creature", "tapir", "monitor_lizard", "lion_dance"]);
-const FLYERS = new Set<ActorKind>([
-  "ufo",
-  "hornbill",
-  "hot_air_balloon",
-  "swarm",
-  "storm",
-  "fireworks",
-]);
+const WALKERS = new Set<ActorKind>(["kaiju", "creature"]);
+const FLYERS = new Set<ActorKind>(["ufo", "hot_air_balloon", "swarm", "storm", "fireworks"]);
 
 type Fit = "max" | "width" | "height";
 
@@ -1448,11 +1441,8 @@ function CustomActor(p: ActorProps) {
 }
 
 const HITS_GROUND = new Set<ActorKind>([
-  "tapir",
-  "monitor_lizard",
-  "durian",
-  "landslide",
   "sinkhole",
+  "landslide",
   "whale",
   "meteor",
   "giant_object",
@@ -1460,6 +1450,7 @@ const HITS_GROUND = new Set<ActorKind>([
   "creature",
   "wave",
   "tornado",
+  "rift",
 ]);
 
 /** The component that plays one actor. */
@@ -1595,16 +1586,19 @@ export function SpectacleView({
         bus.spawns.push({
           color: RESPONDER_COLOR[resp],
           count: 3,
-          size: resp === "fire" || resp === "army" ? 1.3 : 1,
-          flashing: resp !== "cleanup" && resp !== "army",
+          size: resp === "fire" || resp === "agents" ? 1.3 : 1,
+          flashing: resp !== "cleanup" && resp !== "agents",
           x,
           z,
           until: now + 16,
         });
       }
-      for (const a of run.actors.filter((act) => act.kind === "convoy")) {
+      for (const a of run.actors.filter(
+        (act) => act.kind === "convoy" || act.kind === "black_vans",
+      )) {
         bus.spawns.push({
-          color: a.color,
+          // The lab's vans are always black.
+          color: a.kind === "black_vans" ? "#121316" : a.color,
           count: Math.min(12, Math.round(a.count)),
           size: 0.8 + a.size * 0.15,
           flashing: false,

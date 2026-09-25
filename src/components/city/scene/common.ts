@@ -73,6 +73,8 @@ export interface WorldBus {
   blackoutUntil: number;
   /** Clock time until which trains are halted. */
   railStopUntil: number;
+  /** Clock time until which red lightning crackles over the town. */
+  redStormUntil: number;
 }
 
 export const createBus = (): WorldBus => ({
@@ -85,6 +87,7 @@ export const createBus = (): WorldBus => ({
   hazeUntil: 0,
   blackoutUntil: 0,
   railStopUntil: 0,
+  redStormUntil: 0,
 });
 
 /**

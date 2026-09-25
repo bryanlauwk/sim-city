@@ -55,13 +55,15 @@ export function PhotoSky() {
       Math.min(1, env.daylight * 2.2) *
       (1 - env.dusk * 0.6) *
       (env.raining ? 0.2 : 1) *
-      (env.hazy ? 0.35 : 1);
+      (env.hazy ? 0.35 : 1) *
+      (env.upside ? 0 : 1 - Math.min(0.7, env.rift / 120));
     material.opacity = show;
     // Warmer towards sunset; brighter in a lightning flash.
     const warm = env.dusk * 0.35;
     const lift = 1.05 + env.flash * 0.8;
     material.color.setRGB(lift, lift * (1 - warm * 0.35), lift * (1 - warm * 0.6));
-    scene.environmentIntensity = (0.08 + env.daylight * 0.42) * (env.raining ? 0.55 : 1);
+    scene.environmentIntensity =
+      (0.08 + env.daylight * 0.42) * (env.raining ? 0.55 : 1) * (env.upside ? 0.08 : 1);
     // Centred on the camera, so the dome's edge never comes into view.
     dome.current?.position.copy(camera.position);
   });

@@ -12,15 +12,9 @@ from PIL import Image, ImageChops, ImageFilter
 
 TEXTURES = Path(__file__).resolve().parents[1] / "public" / "textures"
 STRENGTHS = {
-    "tapir-fur": 2.4,
-    "hornbill-feather": 2.0,
-    "durian-rind": 4.2,
     "whale-skin": 1.7,
     "kaiju-scales": 4.0,
     "wet-asphalt": 3.4,
-    "heritage-plaster": 2.2,
-    "kampung-wood": 2.8,
-    "terracotta-roof": 2.7,
 }
 
 
