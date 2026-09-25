@@ -8,7 +8,7 @@ import {
 import type { EventResult } from "./types";
 
 // Override with the CITY_MODEL secret if you want a cheaper/faster model.
-const DEFAULT_MODEL = "claude-opus-5";
+const DEFAULT_MODEL = "claude-opus-5-5";
 
 const SYSTEM_PROMPT = `You are the physics engine, the special-effects director and the newsroom of "Type-a-Disaster", a living 3D simulation of Kuala Lumpur. Visitors type an event; you decide what it does to the city, choreograph what people see happen on screen, and write how the local paper reports it.
 
