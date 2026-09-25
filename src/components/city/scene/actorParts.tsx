@@ -3,6 +3,7 @@ import { useFrame, useLoader } from "@react-three/fiber";
 import * as THREE from "three";
 import type { Actor, ActorShape } from "@/lib/city/types";
 import { hash, type WorldBus } from "./common";
+import { textureProps } from "./textures";
 
 /** Seconds of aftermath after impact before a spectacle ends. */
 export const AFTERMATH = 10;
@@ -64,9 +65,7 @@ export function Mat({
   return (
     <meshStandardMaterial
       color={color}
-      map={map}
-      normalMap={normalMap}
-      normalScale={normalMap ? new THREE.Vector2(normalStrength, normalStrength) : undefined}
+      {...textureProps(map, normalMap, normalStrength)}
       roughness={roughness}
       metalness={metalness}
       emissive={emissive ?? "#000000"}

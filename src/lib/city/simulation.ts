@@ -383,7 +383,8 @@ function targetTiles(s: CityState, target: TileTarget): number[] {
       .map((i) => [i, distToCenter(i) + rand(s) * 3] as const)
       .sort((a, b) => a[1] - b[1])
       .map(([i]) => i);
-  if (target === "edge")
+  // The map has no tiles of its own for "outskirts": it means the city's edge.
+  if (target === "edge" || target === "outskirts")
     return shuffle(
       s,
       all.filter((i) => {
@@ -402,21 +403,72 @@ function targetTiles(s: CityState, target: TileTarget): number[] {
   return shuffle(s, inDistrict);
 }
 
-/** Buildable lots in (or next to) the targeted area. */
-function buildLots(s: CityState, target: TileTarget): number[] {
-  const free = (i: number) => ["empty", "rubble"].includes(s.grid[i].kind);
+/** What each kind of tile can be redeveloped into when its area is full. */
+const REDEVELOP: Partial<Record<BuildKind, TileKind[]>> = {
+  tower: ["house", "shop"],
+  shop: ["house"],
+  park: ["house", "shop"],
+  forest: ["house", "shop"],
+};
+
+const isFree = (s: CityState, i: number) =>
+  s.grid[i].kind === "empty" || s.grid[i].kind === "rubble";
+
+/** The targeted area: the tiles themselves, or those next to a targeted kind. */
+function targetArea(s: CityState, target: TileTarget): number[] {
   const kind = TARGET_KIND[target];
-  let lots: number[];
-  if (kind && kind !== "empty") {
-    const near = new Set<number>();
-    s.grid.forEach((t, i) => {
-      if (t.kind === kind) NEIGHBORS[i].filter(free).forEach((n) => near.add(n));
-    });
-    lots = shuffle(s, [...near]);
-  } else {
-    lots = targetTiles(s, target).filter(free);
-  }
-  return lots;
+  if (!kind || kind === "empty") return targetTiles(s, target);
+  const near = new Set<number>();
+  s.grid.forEach((t, i) => {
+    if (t.kind === kind) NEIGHBORS[i].forEach((n) => near.add(n));
+  });
+  return shuffle(s, [...near]);
+}
+
+/** Free lots within a few tiles of an area, nearest first (no RNG draws). */
+function lotsAround(s: CityState, area: number[], reach = 3): number[] {
+  const inArea = new Set(area);
+  const found: [number, number][] = [];
+  s.grid.forEach((_, i) => {
+    if (inArea.has(i) || !isFree(s, i)) return;
+    const { x, y } = xy(i);
+    let best = Infinity;
+    for (const a of area) {
+      const p = xy(a);
+      best = Math.min(best, Math.max(Math.abs(p.x - x), Math.abs(p.y - y)));
+      if (best === 1) break;
+    }
+    // Ties broken by a fixed per-tile order, so replays don't shift the RNG.
+    if (best <= reach) found.push([i, best + ((i * 2654435761) % 997) / 2000]);
+  });
+  return found.sort((a, b) => a[1] - b[1]).map(([i]) => i);
+}
+
+/**
+ * Where a build lands: free lots in the targeted area, then (for things that
+ * can replace older buildings) redevelopment inside the area, then the nearest
+ * free lots around it. A full district still gets what the event promised.
+ */
+function buildLots(s: CityState, target: TileTarget, build: BuildKind): number[] {
+  const area = targetArea(s, target);
+  const replaceable = REDEVELOP[build] ?? [];
+  return [
+    ...area.filter((i) => isFree(s, i)),
+    ...area.filter((i) => replaceable.includes(s.grid[i].kind)),
+    ...lotsAround(s, area),
+  ];
+}
+
+/** A landmark goes where it was aimed, over ordinary buildings if need be. */
+function landmarkLots(s: CityState, target: TileTarget): number[] {
+  const area = targetArea(s, target);
+  const ordinary = (i: number) => !["road", "landmark", "water"].includes(s.grid[i].kind);
+  return [
+    ...area.filter((i) => isFree(s, i)),
+    ...area.filter((i) => ordinary(i) && !isFree(s, i)),
+    ...lotsAround(s, area),
+    ...area.filter((i) => s.grid[i].kind === "landmark"),
+  ];
 }
 
 const DEFAULT_LANDMARK: Landmark = {
@@ -461,16 +513,16 @@ function applyOp(s: CityState, op: TileOp) {
       break;
     case "build": {
       const kind: BuildKind = op.build_kind ?? "house";
-      buildLots(s, op.target)
+      buildLots(s, op.target, kind)
         .slice(0, count)
         .forEach((i) => setKind(s, i, kind));
       break;
     }
     case "landmark": {
       const lm = op.landmark ?? DEFAULT_LANDMARK;
-      let lots = buildLots(s, op.target);
-      if (!lots.length) lots = targetTiles(s, op.target).filter((i) => s.grid[i].kind !== "road");
-      lots.slice(0, count).forEach((i) => setKind(s, i, "landmark", lm));
+      landmarkLots(s, op.target)
+        .slice(0, count)
+        .forEach((i) => setKind(s, i, "landmark", lm));
       break;
     }
   }

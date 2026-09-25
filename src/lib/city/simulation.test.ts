@@ -1,5 +1,6 @@
 /// <reference types="bun" />
 import { describe, expect, test } from "bun:test";
+import { districtAt } from "./kl";
 import { eventResultSchema } from "./schema";
 import { applyEvent, countKinds, createCity, replay, tick } from "./simulation";
 import type { EventResult } from "./types";
@@ -106,6 +107,59 @@ describe("city simulation", () => {
       const x = i % 32;
       const y = Math.floor(i / 32);
       expect(x >= 9 && x <= 13 && y >= 23 && y <= 27).toBe(true);
+    }
+  });
+
+  test("builds still land when the targeted district is full", () => {
+    let s = createCity(12345);
+    while (s.day < 300) s = tick(s);
+    const inKlcc = (i: number) => districtAt(i).id === "klcc";
+    const free = s.grid.filter((t, i) => inKlcc(i) && ["empty", "rubble"].includes(t.kind));
+    expect(free.length).toBe(0);
+    const parks = (st: typeof s) => st.grid.filter((t, i) => inKlcc(i) && t.kind === "park").length;
+    const next = applyEvent(s, "DBKL opens pocket parks in KLCC", {
+      ...meteor,
+      tile_ops: [{ op: "build", target: "klcc", count: 3, build_kind: "park", landmark: null }],
+      followups: [],
+      ongoing: null,
+    });
+    expect(parks(next) - parks(s)).toBe(3);
+    // Landmarks aimed at a full district replace ordinary buildings, never icons.
+    const icons = s.grid.filter((t) => t.kind === "landmark").map((t) => t.landmark?.name);
+    const withWhale = applyEvent(s, "A whale lands in KLCC", {
+      ...meteor,
+      tile_ops: [
+        {
+          op: "landmark",
+          target: "klcc",
+          count: 1,
+          build_kind: null,
+          landmark: { name: "Beached whale", shape: "blob", color: "#445566", height: 1 },
+        },
+      ],
+      followups: [],
+      ongoing: null,
+    });
+    const whale = withWhale.grid.findIndex((t) => t.landmark?.name === "Beached whale");
+    expect(inKlcc(whale)).toBe(true);
+    for (const name of icons)
+      expect(withWhale.grid.some((t) => t.landmark?.name === name)).toBe(true);
+  });
+
+  test("outskirts means the edge of the map", () => {
+    const s = createCity(7);
+    const next = applyEvent(s, "Floods on the outskirts", {
+      ...meteor,
+      tile_ops: [{ op: "flood", target: "outskirts", count: 6, build_kind: null, landmark: null }],
+      followups: [],
+      ongoing: null,
+    });
+    const flooded = next.grid.map((t, i) => [t, i] as const).filter(([t]) => t.flood > 0);
+    expect(flooded.length).toBe(6);
+    for (const [, i] of flooded) {
+      const x = i % 32;
+      const y = Math.floor(i / 32);
+      expect(Math.min(x, y, 31 - x, 31 - y)).toBeLessThanOrEqual(2);
     }
   });
 

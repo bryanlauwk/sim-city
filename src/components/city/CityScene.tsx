@@ -8,6 +8,7 @@ import { createBus, hash, type WorldBus } from "./scene/common";
 import { env } from "./scene/env";
 import { Crossings, Ground, StreetLamps, Trees } from "./scene/Ground";
 import { KLStreetProps } from "./scene/KLStreetProps";
+import { preloadActorTextures } from "./scene/textures";
 import { Life } from "./scene/Life";
 import { Rail } from "./scene/Rail";
 import { Sky } from "./scene/Sky";
@@ -54,34 +55,30 @@ function Shaker({ bus, children }: { bus: WorldBus; children: React.ReactNode })
 const OPENING_TARGET = [1, 0, 3] as const;
 const OPENING_CAMERA: [number, number, number] = [-5, 15, 23];
 
-function ActionLights({ run }: { run: SpectacleRun }) {
+/**
+ * Key and rim light on the action. They stay mounted at zero brightness
+ * between events: adding or removing a light changes the scene's light count,
+ * which makes three.js recompile every lit material right as an event starts.
+ */
+function ActionLights({ run }: { run: SpectacleRun | null }) {
   const key = useRef<THREE.PointLight>(null);
   const rim = useRef<THREE.PointLight>(null);
   useFrame((_, dt) => {
     const blend = Math.min(1, dt * 4);
+    const on = run ? 1 : 0;
+    if (run) {
+      key.current?.position.set(run.focus.x + 3, 7, run.focus.z + 4);
+      rim.current?.position.set(run.focus.x - 4, 6, run.focus.z - 3);
+    }
     if (key.current)
-      key.current.intensity += ((env.night ? 45 : 17) - key.current.intensity) * blend;
+      key.current.intensity += (on * (env.night ? 45 : 17) - key.current.intensity) * blend;
     if (rim.current)
-      rim.current.intensity += ((env.night ? 28 : 10) - rim.current.intensity) * blend;
+      rim.current.intensity += (on * (env.night ? 28 : 10) - rim.current.intensity) * blend;
   });
   return (
     <>
-      <pointLight
-        ref={key}
-        position={[run.focus.x + 3, 7, run.focus.z + 4]}
-        color="#ffe4bd"
-        intensity={17}
-        distance={16}
-        decay={2}
-      />
-      <pointLight
-        ref={rim}
-        position={[run.focus.x - 4, 6, run.focus.z - 3]}
-        color="#a4c9f3"
-        intensity={10}
-        distance={14}
-        decay={2}
-      />
+      <pointLight ref={key} color="#ffe4bd" intensity={0} distance={16} decay={2} />
+      <pointLight ref={rim} color="#a4c9f3" intensity={0} distance={14} decay={2} />
     </>
   );
 }
@@ -215,6 +212,12 @@ function CityScene({
 }: CitySceneProps) {
   const small = typeof window !== "undefined" && window.innerWidth < 640;
   const bus = useMemo(createBus, []);
+  // Fetch actor textures in the background once the city is up, so the
+  // first whale or kaiju of the session doesn't wait on a download.
+  useEffect(() => {
+    const id = setTimeout(preloadActorTextures, 2500);
+    return () => clearTimeout(id);
+  }, []);
   const registry = useRef<LabelRegistry>(new Map());
   const landmarkLabels = useMemo(() => landmarkLabelSpecs(city.grid), [city.grid]);
   const labels = useMemo<LabelSpec[]>(() => {
@@ -257,7 +260,7 @@ function CityScene({
   return (
     <div className="relative h-full w-full">
       <Canvas
-        shadows={small ? false : "soft"}
+        shadows={small ? false : "percentage"}
         dpr={[1, small ? 1.5 : 2]}
         camera={{ position: OPENING_CAMERA, fov: 40, far: 200 }}
         gl={{
@@ -276,7 +279,7 @@ function CityScene({
           bus={bus}
           shadows={!small}
         />
-        {spectacle && <ActionLights run={spectacle} />}
+        <ActionLights run={spectacle} />
         <Shaker bus={bus}>
           <Ground grid={city.grid} />
           <Trees grid={city.grid} />

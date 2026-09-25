@@ -5,6 +5,7 @@ import * as THREE from "three";
 import type { Landmark, Tile } from "@/lib/city/types";
 import { tileX, tileZ } from "./common";
 import { useNormalMap, useSurfaceMap } from "./actorParts";
+import { textureProps } from "./textures";
 
 function Mat({
   color,
@@ -23,9 +24,7 @@ function Mat({
   return (
     <meshStandardMaterial
       color={color}
-      map={map}
-      normalMap={normalMap}
-      normalScale={normalMap ? new THREE.Vector2(0.22, 0.22) : undefined}
+      {...textureProps(map, normalMap, 0.22)}
       roughness={roughness}
       metalness={metal * 0.25}
     />
