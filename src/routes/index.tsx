@@ -1,6 +1,16 @@
 import { ClientOnly, createFileRoute } from "@tanstack/react-router";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { FastForward, Loader2, Pause, Play, RotateCcw, Send, Share2, Tag } from "lucide-react";
+import {
+  Camera,
+  FastForward,
+  Loader2,
+  Pause,
+  Play,
+  RotateCcw,
+  Send,
+  Share2,
+  Tag,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
@@ -41,6 +51,7 @@ import { districtAt, DISTRICTS } from "@/lib/city/kl";
 import type { SimClock, SpectacleRun } from "@/components/city/CityScene";
 import { hourOf } from "@/components/city/scene/common";
 import { withRealModels } from "@/components/city/scene/realModels";
+import { getMapsKey } from "@/lib/city/maps.functions";
 import { simulateEvent } from "@/lib/city/simulate.functions";
 import { applyModels, findModel, warmModelIndex, type FoundModel } from "@/lib/city/modelSearch";
 import {
@@ -164,6 +175,21 @@ function Index() {
   const [paused, setPaused] = useState(false);
   const [fast, setFast] = useState(false);
   const [labels, setLabels] = useState(true);
+  // Google's real Kuala Lumpur in 3D, when the site has a Maps key.
+  const [mapsKey, setMapsKey] = useState<string | null>(null);
+  const [photo, setPhoto] = useState(false);
+  useEffect(() => {
+    getMapsKey()
+      .then((r) => setMapsKey(r.key))
+      .catch(() => undefined);
+  }, []);
+  const mapsFailed = useCallback(() => {
+    setMapsKey(null);
+    setPhoto(false);
+    toast("Google 3D tiles unavailable", {
+      description: "Check the Maps key's API and referrer restrictions, and billing.",
+    });
+  }, []);
   const [credits, setCredits] = useState<Credits>({ credits: MAX_CREDITS, since: 0 });
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -444,6 +470,9 @@ function Index() {
                   onSpectacleDone={endSpectacle}
                   tremor={tremor}
                   showLabels={labels}
+                  mapsKey={mapsKey}
+                  photo={photo}
+                  onMapsFail={mapsFailed}
                 />
               ) : (
                 <SceneFallback />
@@ -537,6 +566,22 @@ function Index() {
           >
             <Tag />
           </Button>
+          {mapsKey && (
+            <Button
+              size="icon"
+              variant="outline"
+              className={cn(
+                "rounded-none border-ink bg-paper/90",
+                photo && "bg-ink text-paper hover:bg-ink/90 hover:text-paper",
+              )}
+              onClick={() => setPhoto((p) => !p)}
+              aria-label="Photo mode: the real Kuala Lumpur"
+              aria-pressed={photo}
+              title="Photo mode: the real Kuala Lumpur (Google 3D)"
+            >
+              <Camera />
+            </Button>
+          )}
           <Button
             size="icon"
             variant="outline"
