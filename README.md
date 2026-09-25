@@ -21,6 +21,7 @@ A living, detailed procedural Kuala Lumpur. You type what happens to it ("a whal
 
 ## Photoreal rendering
 
+- **Kuala Lumpur's real buildings** (`scene/osmBuildings.ts`, `scene/RealBuildings.tsx`). About 2,200 building footprints from OpenStreetMap, with real heights where OSM records them (The Exchange 106, Four Seasons Place, Menara Ilham…), are clipped to the map's tiles and extruded with the kit's facade shaders: three draw calls for the whole city. About 80% of the starting building tiles show their real buildings. A tile hands over to the procedural kit once something happens to it (destroyed, rebuilt, redeveloped), so the city stays fully destructible. Landmarks keep their hand-built models. Rebuild the data with `python3 scripts/build_osm_buildings.py` (no key needed).
 - **A photographed sky** (`scene/PhotoSky.tsx`). Poly Haven's CC0 "Kloofendal 48d Partly Cloudy" HDRI lights the scene, so glass towers and PBR models reflect a real sky. A 2K photo of the same sky is drawn behind the skyline by day and fades into the dusk, storm, haze and night colours.
 - **Film-like finishing on larger screens** (`scene/PostFX.tsx`): ambient occlusion, bloom (stronger at night), ACES tone mapping and a light vignette. If the frame rate drops below about 28 fps, it switches itself off. `?fx=0` in the URL turns it off from the start.
 - **Real models for built-in actors** (`scene/realModels.ts`): a humpback whale, durian, baby tapir, rhinoceros hornbill, Komodo dragon, animated running T-Rex (the kaiju), UFO, hot-air balloon and a scanned asteroid (the meteor's rock, which keeps its fiery trail). They're CC BY models from Objaverse, loaded from Hugging Face when an event needs them and credited in the Gazette. The procedural actor stands in while one loads, and stays if it can't. Phones get only the models under 4 MB.
@@ -110,6 +111,8 @@ Run `npm run test` (uses Bun) for the simulation tests.
 ## Credits
 
 The city itself is generated in code: buildings, landmarks, trees, vehicles, people and effects.
+
+Building footprints and heights are © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, under the Open Database License; `public/osm/kl-buildings.json` is offered under the same licence.
 
 The sky is Poly Haven's [Kloofendal 48d Partly Cloudy (Pure Sky)](https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky) by Greg Zaal and Jarod Guest (CC0).
 
