@@ -40,6 +40,7 @@ import {
 import { districtAt, DISTRICTS } from "@/lib/city/kl";
 import type { SimClock, SpectacleRun } from "@/components/city/CityScene";
 import { hourOf } from "@/components/city/scene/common";
+import { withRealModels } from "@/components/city/scene/realModels";
 import { simulateEvent } from "@/lib/city/simulate.functions";
 import { applyModels, findModel, warmModelIndex, type FoundModel } from "@/lib/city/modelSearch";
 import {
@@ -349,6 +350,11 @@ function Index() {
         ? null
         : await Promise.race([lookups, new Promise<null>((r) => setTimeout(() => r(null), 2000))]);
       if (early) result.spectacle.actors = applyModels(result.spectacle.actors, early);
+      // Built-in actors are played by real, credited models where one exists.
+      const phone =
+        window.innerWidth < 640 ||
+        !!(navigator as { connection?: { saveData?: boolean } }).connection?.saveData;
+      result.spectacle.actors = withRealModels(result.spectacle.actors, phone);
       adoptShared();
       setDismissedCollapse(false);
       setInput("");
